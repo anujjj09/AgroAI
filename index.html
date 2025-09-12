@@ -1,0 +1,1205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroAI - Smart Crop Advisory System</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        .animate-float {
+            animation: float 3s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+        .typing-indicator span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #667eea;
+            margin: 0 2px;
+            animation: typing 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); }
+            30% { transform: translateY(-10px); }
+        }
+        .chat-message {
+            animation: slideIn 0.3s ease-out;
+        }
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .pulse-dot {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(102, 126, 234, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(102, 126, 234, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useCallback } = React;
+
+        // Language translations
+        const translations = {
+            en: {
+                welcome: "Welcome to AgroAI",
+                tagline: "Your Smart Farming Companion",
+                phoneNumber: "Phone Number",
+                enterPhone: "Enter your 10-digit mobile number",
+                sendOTP: "Send OTP",
+                verifyOTP: "Verify OTP",
+                enterOTP: "Enter 6-digit OTP",
+                selectLanguage: "Select Your Preferred Language",
+                continue: "Continue",
+                resendOTP: "Resend OTP",
+                dashboard: "Dashboard",
+                cropAdvisory: "Crop Advisory",
+                pestDetection: "Pest Detection",
+                weather: "Weather",
+                market: "Market Prices",
+                community: "Community",
+                profile: "Profile",
+                logout: "Logout",
+                askQuestion: "Ask your farming question...",
+                typeMessage: "Type your message or use voice...",
+                uploadImage: "Upload Crop Image",
+                detectPest: "Detect Pest/Disease",
+                todayWeather: "Today's Weather in Ludhiana",
+                marketPrices: "Market Prices (Ludhiana Mandi)",
+                recentAlerts: "Recent Alerts",
+                yourCrops: "Your Crops",
+                farmLocation: "Farm Location",
+                soilType: "Soil Type",
+                addCrop: "Add Crop",
+                voiceInput: "Voice Input",
+                send: "Send",
+                detecting: "Detecting...",
+                processing: "Processing...",
+                wheat: "Wheat",
+                rice: "Rice",
+                cotton: "Cotton",
+                punjab: "Punjab, India",
+                loamy: "Loamy Soil",
+                temperature: "Temperature",
+                humidity: "Humidity",
+                rainfall: "Rainfall",
+                windSpeed: "Wind Speed",
+                sunny: "Sunny",
+                cloudy: "Cloudy",
+                rainy: "Rainy",
+                selectCrop: "Select Crop",
+                getAdvice: "Get Personalized Advice",
+                loading: "Loading...",
+                error: "Could not fetch data.",
+                apiKeyError: "API Key is missing or invalid.",
+                addNewCrop: "Add New Crop",
+                cropName: "Crop Name",
+                acres: "Acres",
+                cancel: "Cancel",
+            },
+            hi: {
+                welcome: "AgroAI में आपका स्वागत है",
+                tagline: "आपका स्मार्ट कृषि साथी",
+                phoneNumber: "फोन नंबर",
+                enterPhone: "अपना 10 अंकों का मोबाइल नंबर दर्ज करें",
+                sendOTP: "OTP भेजें",
+                verifyOTP: "OTP सत्यापित करें",
+                enterOTP: "6 अंकों का OTP दर्ज करें",
+                selectLanguage: "अपनी पसंदीदा भाषा चुनें",
+                continue: "जारी रखें",
+                resendOTP: "OTP पुनः भेजें",
+                dashboard: "डैशबोर्ड",
+                cropAdvisory: "फसल सलाह",
+                pestDetection: "कीट पहचान",
+                weather: "मौसम",
+                market: "बाजार भाव",
+                community: "समुदाय",
+                profile: "प्रोफाइल",
+                logout: "लॉगआउट",
+                askQuestion: "अपना कृषि प्रश्न पूछें...",
+                typeMessage: "अपना संदेश टाइप करें या आवाज का उपयोग करें...",
+                uploadImage: "फसल की तस्वीर अपलोड करें",
+                detectPest: "कीट/रोग की पहचान करें",
+                todayWeather: "लुधियाना में आज का मौसम",
+                marketPrices: "बाजार भाव (लुधियाना मंडी)",
+                recentAlerts: "हाल की चेतावनियां",
+                yourCrops: "आपकी फसलें",
+                farmLocation: "खेत का स्थान",
+                soilType: "मिट्टी का प्रकार",
+                addCrop: "फसल जोड़ें",
+                voiceInput: "आवाज इनपुट",
+                send: "भेजें",
+                detecting: "पहचान हो रही है...",
+                processing: "प्रसंस्करण...",
+                wheat: "गेहूं",
+                rice: "धान",
+                cotton: "कपास",
+                punjab: "पंजाब, भारत",
+                loamy: "दोमट मिट्टी",
+                temperature: "तापमान",
+                humidity: "आर्द्रता",
+                rainfall: "वर्षा",
+                windSpeed: "हवा की गति",
+                sunny: "धूप",
+                cloudy: "बादल",
+                rainy: "बारिश",
+                selectCrop: "फसल चुनें",
+                getAdvice: "व्यक्तिगत सलाह प्राप्त करें",
+                loading: "लोड हो रहा है...",
+                error: "डेटा प्राप्त नहीं हो सका।",
+                apiKeyError: "API कुंजी गुम है या अमान्य है।",
+                addNewCrop: "नई फसल जोड़ें",
+                cropName: "फसल का नाम",
+                acres: "एकड़",
+                cancel: "रद्द करें",
+            },
+            pa: {
+                welcome: "AgroAI ਵਿੱਚ ਤੁਹਾਡਾ ਸਵਾਗਤ ਹੈ",
+                tagline: "ਤੁਹਾਡਾ ਸਮਾਰਟ ਖੇਤੀ ਸਾਥੀ",
+                phoneNumber: "ਫੋਨ ਨੰਬਰ",
+                enterPhone: "ਆਪਣਾ 10 ਅੰਕਾਂ ਦਾ ਮੋਬਾਈਲ ਨੰਬਰ ਦਾਖਲ ਕਰੋ",
+                sendOTP: "OTP ਭੇਜੋ",
+                verifyOTP: "OTP ਪੁਸ਼ਟੀ ਕਰੋ",
+                enterOTP: "6 ਅੰਕਾਂ ਦਾ OTP ਦਾਖਲ ਕਰੋ",
+                selectLanguage: "ਆਪਣੀ ਪਸੰਦੀਦਾ ਭਾਸ਼ਾ ਚੁਣੋ",
+                continue: "ਜਾਰੀ ਰੱਖੋ",
+                resendOTP: "OTP ਦੁਬਾਰਾ ਭੇਜੋ",
+                dashboard: "ਡੈਸ਼ਬੋਰਡ",
+                cropAdvisory: "ਫਸਲ ਸਲਾਹ",
+                pestDetection: "ਕੀੜੇ ਦੀ ਪਛਾਣ",
+                weather: "ਮੌਸਮ",
+                market: "ਮੰਡੀ ਭਾਅ",
+                community: "ਭਾਈਚਾਰਾ",
+                profile: "ਪ੍ਰੋਫਾਈਲ",
+                logout: "ਲੌਗਆਉਟ",
+                askQuestion: "ਆਪਣਾ ਖੇਤੀ ਸਵਾਲ ਪੁੱਛੋ...",
+                typeMessage: "ਆਪਣਾ ਸੁਨੇਹਾ ਟਾਈਪ ਕਰੋ ਜਾਂ ਆਵਾਜ਼ ਵਰਤੋ...",
+                uploadImage: "ਫਸਲ ਦੀ ਤਸਵੀਰ ਅਪਲੋਡ ਕਰੋ",
+                detectPest: "ਕੀੜੇ/ਰੋਗ ਦੀ ਪਛਾਣ ਕਰੋ",
+                todayWeather: "ਲੁਧਿਆਣਾ ਵਿੱਚ ਅੱਜ ਦਾ ਮੌਸਮ",
+                marketPrices: "ਮੰਡੀ ਭਾਅ (ਲੁਧਿਆਣਾ ਮੰਡੀ)",
+                recentAlerts: "ਤਾਜ਼ਾ ਚੇਤਾਵਨੀਆਂ",
+                yourCrops: "ਤੁਹਾਡੀਆਂ ਫਸਲਾਂ",
+                farmLocation: "ਖੇਤ ਦਾ ਸਥਾਨ",
+                soilType: "ਮਿੱਟੀ ਦੀ ਕਿਸਮ",
+                addCrop: "ਫਸਲ ਸ਼ਾਮਲ ਕਰੋ",
+                voiceInput: "ਆਵਾਜ਼ ਇਨਪੁੱਟ",
+                send: "ਭੇਜੋ",
+                detecting: "ਪਛਾਣ ਹੋ ਰਹੀ ਹੈ...",
+                processing: "ਪ੍ਰੋਸੈਸਿੰਗ...",
+                wheat: "ਕਣਕ",
+                rice: "ਝੋਨਾ",
+                cotton: "ਕਪਾਹ",
+                punjab: "ਪੰਜਾਬ, ਭਾਰਤ",
+                loamy: "ਦੋਮਟ ਮਿੱਟੀ",
+                temperature: "ਤਾਪਮਾਨ",
+                humidity: "ਨਮੀ",
+                rainfall: "ਮੀਂਹ",
+                windSpeed: "ਹਵਾ ਦੀ ਗਤੀ",
+                sunny: "ਧੁੱਪ",
+                cloudy: "ਬੱਦਲ",
+                rainy: "ਮੀਂਹ",
+                selectCrop: "ਫਸਲ ਚੁਣੋ",
+                getAdvice: "ਵਿਅਕਤੀਗਤ ਸਲਾਹ ਪ੍ਰਾਪਤ ਕਰੋ",
+                loading: "ਲੋਡ ਹੋ ਰਿਹਾ ਹੈ...",
+                error: "ਡੇਟਾ ਪ੍ਰਾਪਤ ਨਹੀਂ ਕੀਤਾ ਜਾ ਸਕਿਆ।",
+                apiKeyError: "API ਕੁੰਜੀ ਗੁੰਮ ਹੈ ਜਾਂ ਅਵੈਧ ਹੈ।",
+                addNewCrop: "ਨਵੀਂ ਫਸਲ ਸ਼ਾਮਲ ਕਰੋ",
+                cropName: "ਫਸਲ ਦਾ ਨਾਮ",
+                acres: "ਏਕੜ",
+                cancel: "ਰੱਦ ਕਰੋ",
+            }
+        };
+
+        // Main App Component
+        function App() {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
+            const [currentStep, setCurrentStep] = useState('phone'); // phone, otp, language, dashboard
+            const [phoneNumber, setPhoneNumber] = useState('');
+            const [otp, setOtp] = useState('');
+            const [language, setLanguage] = useState('en');
+            const [userName, setUserName] = useState('');
+            const t = translations[language];
+
+            const handlePhoneSubmit = () => {
+                if (phoneNumber.length === 10) {
+                    // Simulate OTP send
+                    setCurrentStep('otp');
+                }
+            };
+
+            const handleOtpVerify = () => {
+                if (otp.length === 6) {
+                    // Simulate OTP verification
+                    setCurrentStep('language');
+                }
+            };
+
+            const handleLanguageSelect = (lang) => {
+                setLanguage(lang);
+                setIsAuthenticated(true);
+                setCurrentStep('dashboard');
+                setUserName('Farmer_' + phoneNumber.slice(-4));
+            };
+
+            const handleLogout = () => {
+                setIsAuthenticated(false);
+                setCurrentStep('phone');
+                setPhoneNumber('');
+                setOtp('');
+            };
+
+            if (!isAuthenticated) {
+                return (
+                    <div className="min-h-screen gradient-bg flex items-center justify-center p-4">
+                        <div className="glass-effect rounded-2xl shadow-2xl p-8 w-full max-w-md animate-float">
+                            {/* Logo and Title */}
+                            <div className="text-center mb-8">
+                                <div className="w-20 h-20 bg-green-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                                    <span className="text-3xl">🌾</span>
+                                </div>
+                                <h1 className="text-3xl font-bold text-gray-800">{t.welcome}</h1>
+                                <p className="text-gray-600 mt-2">{t.tagline}</p>
+                            </div>
+
+                            {/* Phone Input Step */}
+                            {currentStep === 'phone' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t.phoneNumber}
+                                        </label>
+                                        <input
+                                            type="tel"
+                                            placeholder={t.enterPhone}
+                                            value={phoneNumber}
+                                            onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                                            maxLength="10"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={handlePhoneSubmit}
+                                        disabled={phoneNumber.length !== 10}
+                                        className={`w-full py-3 rounded-lg font-semibold transition-all ${
+                                            phoneNumber.length === 10
+                                                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        {t.sendOTP}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* OTP Verification Step */}
+                            {currentStep === 'otp' && (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            {t.enterOTP}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            placeholder="000000"
+                                            value={otp}
+                                            onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                                            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-center text-2xl tracking-widest"
+                                            maxLength="6"
+                                        />
+                                        <p className="text-sm text-gray-500 mt-2">
+                                            OTP sent to +91 {phoneNumber}
+                                        </p>
+                                    </div>
+                                    <button
+                                        onClick={handleOtpVerify}
+                                        disabled={otp.length !== 6}
+                                        className={`w-full py-3 rounded-lg font-semibold transition-all ${
+                                            otp.length === 6
+                                                ? 'bg-purple-600 text-white hover:bg-purple-700'
+                                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                                        }`}
+                                    >
+                                        {t.verifyOTP}
+                                    </button>
+                                    <button className="w-full text-purple-600 hover:text-purple-700 text-sm">
+                                        {t.resendOTP}
+                                    </button>
+                                </div>
+                            )}
+
+                            {/* Language Selection Step */}
+                            {currentStep === 'language' && (
+                                <div className="space-y-4">
+                                    <h2 className="text-xl font-semibold text-gray-800 text-center mb-6">
+                                        {t.selectLanguage}
+                                    </h2>
+                                    <div className="space-y-3">
+                                        <button
+                                            onClick={() => handleLanguageSelect('en')}
+                                            className="w-full py-4 px-6 bg-white border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all flex items-center justify-between group"
+                                        >
+                                            <span className="text-lg font-medium">English</span>
+                                            <span className="text-2xl group-hover:scale-110 transition-transform">🇬🇧</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleLanguageSelect('hi')}
+                                            className="w-full py-4 px-6 bg-white border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all flex items-center justify-between group"
+                                        >
+                                            <span className="text-lg font-medium">हिन्दी</span>
+                                            <span className="text-2xl group-hover:scale-110 transition-transform">🇮🇳</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleLanguageSelect('pa')}
+                                            className="w-full py-4 px-6 bg-white border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all flex items-center justify-between group"
+                                        >
+                                            <span className="text-lg font-medium">ਪੰਜਾਬੀ</span>
+                                            <span className="text-2xl group-hover:scale-110 transition-transform">🌾</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            }
+
+            return <Dashboard language={language} userName={userName} onLogout={handleLogout} />;
+        }
+
+        // Add Crop Modal Component
+        function AddCropModal({ isOpen, onClose, onAddCrop, t }) {
+            const [cropName, setCropName] = useState('');
+            const [acres, setAcres] = useState('');
+
+            if (!isOpen) return null;
+
+            const handleSubmit = () => {
+                if (cropName && acres) {
+                    onAddCrop({ name: cropName, acres: `${acres} acres`, stage: 'Sowing stage' });
+                    setCropName('');
+                    setAcres('');
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+                        <h3 className="text-xl font-semibold mb-4">{t.addNewCrop}</h3>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">{t.cropName}</label>
+                                <input
+                                    type="text"
+                                    value={cropName}
+                                    onChange={(e) => setCropName(e.target.value)}
+                                    placeholder="e.g., Maize"
+                                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700">{t.acres}</label>
+                                <input
+                                    type="number"
+                                    value={acres}
+                                    onChange={(e) => setAcres(e.target.value)}
+                                    placeholder="e.g., 5"
+                                    className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end space-x-3">
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                            >
+                                {t.cancel}
+                            </button>
+                            <button
+                                onClick={handleSubmit}
+                                className="px-4 py-2 bg-purple-600 text-white rounded-md hover:bg-purple-700"
+                            >
+                                {t.addCrop}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Dashboard Component
+        function Dashboard({ language, userName, onLogout }) {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            const [messages, setMessages] = useState([]);
+            const [inputMessage, setInputMessage] = useState('');
+            const [isRecording, setIsRecording] = useState(false);
+            const [isAiReplying, setIsAiReplying] = useState(false);
+            const [selectedCrop, setSelectedCrop] = useState('');
+            const [uploadedImage, setUploadedImage] = useState(null);
+            const [isDetecting, setIsDetecting] = useState(false);
+            const [detectionResult, setDetectionResult] = useState(null);
+            const [weatherData, setWeatherData] = useState({ loading: true });
+            const [marketPrices, setMarketPrices] = useState({ loading: true });
+            const [isAddCropModalOpen, setIsAddCropModalOpen] = useState(false);
+            const [userCrops, setUserCrops] = useState([
+                { name: "Wheat", acres: "2 acres", stage: "Sowing stage" },
+                { name: "Rice", acres: "1 acre", stage: "Harvesting ready" },
+            ]);
+            const t = translations[language];
+            const fileInputRef = useRef(null);
+            const chatEndRef = useRef(null);
+            
+            // --- API Keys ---
+            const OPENWEATHER_API_KEY = 'a6480846a86998d90a2038d82607f795';
+            const MARKET_API_KEY = '579b464db66ec23bdd0000014a71fb9b493b4afc704174853be98d35';
+            
+            useEffect(() => {
+                // --- Fetch Weather Data for Ludhiana, Punjab ---
+                const fetchWeather = async () => {
+                    if (OPENWEATHER_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY') {
+                        console.error("OpenWeatherMap API key is missing.");
+                        setWeatherData({ loading: false, error: true, errorMessage: t.apiKeyError });
+                        return;
+                    }
+
+                    const lat = 30.9010; // Ludhiana Latitude
+                    const lon = 75.8573; // Ludhiana Longitude
+                    try {
+                        const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`);
+                        if (!response.ok) throw new Error('Weather data fetch failed. Check if your API key is valid.');
+                        const data = await response.json();
+                        setWeatherData({
+                            temperature: `${Math.round(data.main.temp)}°C`,
+                            humidity: `${data.main.humidity}%`,
+                            windSpeed: `${data.wind.speed} km/h`,
+                            condition: data.weather[0] ? data.weather[0].main : 'N/A',
+                            icon: data.weather[0] ? data.weather[0].icon : '01d',
+                            loading: false
+                        });
+                    } catch (error) {
+                        console.error("Weather fetch error:", error);
+                        setWeatherData({ loading: false, error: true, errorMessage: error.message });
+                    }
+                };
+
+                // --- Fetch Market Prices ---
+                const fetchMarketPrices = async () => {
+                     if (MARKET_API_KEY === 'YOUR_MARKET_DATA_API_KEY' || !MARKET_API_KEY) {
+                        console.error("Market Data API key is missing. Using simulation.");
+                        // Fallback to simulation if key is missing
+                        setTimeout(() => {
+                            const basePrices = { wheat: 2150, rice: 1950, cotton: 6200 };
+                            const getPrice = (base) => base + Math.floor(Math.random() * 101) - 50;
+                            setMarketPrices({
+                                data: [
+                                    { commodity: t.wheat, price: `₹${getPrice(basePrices.wheat)}/quintal`, trend: (Math.random() * 4 - 1).toFixed(1) + '%' },
+                                    { commodity: t.rice, price: `₹${getPrice(basePrices.rice)}/quintal`, trend: (Math.random() * 3 - 1).toFixed(1) + '%' },
+                                    { commodity: t.cotton, price: `₹${getPrice(basePrices.cotton)}/quintal`, trend: (Math.random() * 2 - 1).toFixed(1) + '%' }
+                                ],
+                                loading: false
+                            });
+                        }, 1500);
+                        return;
+                     }
+
+                    try {
+                        const response = await fetch(`https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070?api-key=${MARKET_API_KEY}&format=json&filters[market]=Ludhiana&limit=10`);
+                        if (!response.ok) throw new Error('Market data fetch failed');
+                        const apiData = await response.json();
+
+                        const records = apiData.records;
+                        const relevantCommodities = ["Wheat", "Paddy(Dhan)(Common)", "Cotton"];
+                        const prices = relevantCommodities.map(comm => {
+                            const record = records.find(r => r.commodity === comm);
+                            let trend = (Math.random() * 4 - 2).toFixed(1); // Trend isn't in API, so we simulate it
+                            return {
+                                commodity: comm === 'Paddy(Dhan)(Common)' ? t.rice : (comm === 'Wheat' ? t.wheat : t.cotton),
+                                price: record ? `₹${record.modal_price}/quintal` : 'N/A',
+                                trend: `${trend}%`
+                            };
+                        });
+
+                        setMarketPrices({ data: prices, loading: false });
+
+                    } catch (error) {
+                        console.error("Market price fetch error:", error);
+                        setMarketPrices({ loading: false, error: true, errorMessage: error.message });
+                    }
+                };
+
+                fetchWeather();
+                fetchMarketPrices();
+            }, [language]);
+
+
+            useEffect(() => {
+                chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+            }, [messages, isAiReplying]);
+
+            const handleAddCrop = (newCrop) => {
+                setUserCrops(prevCrops => [...prevCrops, newCrop]);
+                setIsAddCropModalOpen(false);
+            };
+
+            const handleDeleteCrop = (indexToDelete) => {
+                setUserCrops(prevCrops => prevCrops.filter((_, index) => index !== indexToDelete));
+            };
+
+            const handleSendMessage = async () => {
+                if (inputMessage.trim() && !isAiReplying) {
+                    const userMessage = {
+                        id: Date.now(),
+                        text: inputMessage,
+                        sender: 'user',
+                        timestamp: new Date().toLocaleTimeString()
+                    };
+                    setMessages(prev => [...prev, userMessage]);
+                    const currentInput = inputMessage;
+                    setInputMessage('');
+                    setIsAiReplying(true);
+
+                    // --- Gemini API Call ---
+                    const apiKey = ""; // Left blank, will be provided by the environment
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+                    
+                    const langName = { en: 'English', hi: 'Hindi', pa: 'Punjabi' }[language];
+                    const prompt = `You are AgroAI, an expert agricultural assistant. Provide a helpful and concise answer for the following question from a farmer. If the question is a simple greeting, respond with a friendly greeting. The farmer is asking about ${selectedCrop || 'their crops'}. Please respond in ${langName}.\n\nQuestion: "${currentInput}"`;
+
+                    const payload = {
+                        contents: [{ parts: [{ text: prompt }] }],
+                        tools: [{ "google_search": {} }],
+                    };
+
+                    try {
+                        const response = await fetch(apiUrl, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                        
+                        const result = await response.json();
+                        const candidate = result.candidates?.[0];
+                        const aiText = candidate?.content?.parts?.[0]?.text || "Sorry, I couldn't process that. Please try again.";
+
+                        const aiResponse = {
+                            id: Date.now() + 1,
+                            text: aiText,
+                            sender: 'ai',
+                            timestamp: new Date().toLocaleTimeString()
+                        };
+                        setMessages(prev => [...prev, aiResponse]);
+
+                    } catch (error) {
+                        console.error("Gemini API call failed:", error);
+                        const errorResponse = {
+                            id: Date.now() + 1,
+                            text: "Sorry, I'm having trouble connecting. Please try again later.",
+                            sender: 'ai',
+                            timestamp: new Date().toLocaleTimeString()
+                        };
+                        setMessages(prev => [...prev, errorResponse]);
+                    } finally {
+                        setIsAiReplying(false);
+                    }
+                }
+            };
+
+            const handleImageUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setUploadedImage(reader.result);
+                        setDetectionResult(null); // Clear previous results on new upload
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handlePestDetection = async () => {
+                if (!uploadedImage) return;
+                setIsDetecting(true);
+                setDetectionResult(null);
+
+                try {
+                    const apiKey = ""; // Provided by environment
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
+
+                    // Extract base64 data and mimeType from the data URL
+                    const base64Data = uploadedImage.split(',')[1];
+                    const mimeType = uploadedImage.split(';')[0].split(':')[1];
+                    if (!base64Data || !mimeType) {
+                        throw new Error("Invalid image format.");
+                    }
+
+                    const langName = { en: 'English', hi: 'Hindi', pa: 'Punjabi' }[language];
+                    const prompt = `You are an expert agricultural entomologist and plant pathologist. Analyze the attached image of a plant. In ${langName}, provide a concise, three-part response formatted with markdown: 1. **Identified Issue:** (e.g., Aphids, Powdery Mildew, Nutrient Deficiency). 2. **Confidence:** (e.g., High, Medium, Low). 3. **Recommended Treatment:** (Provide a simple, actionable organic or chemical treatment). If the image is not a plant, is unclear, or shows no signs of disease/pests, state that clearly.`;
+
+                    const payload = {
+                        contents: [{
+                            parts: [
+                                { text: prompt },
+                                { inlineData: { mimeType, data: base64Data } }
+                            ]
+                        }]
+                    };
+                    
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        throw new Error(`API Error: ${response.status} - ${errorBody}`);
+                    }
+                    
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    const aiText = candidate?.content?.parts?.[0]?.text;
+
+                    if (aiText) {
+                        setDetectionResult({ analysis: aiText });
+                    } else {
+                        throw new Error("Could not get a valid analysis from the AI.");
+                    }
+
+                } catch (error) {
+                    console.error("Pest detection failed:", error);
+                    setDetectionResult({ analysis: `Error: Could not analyze the image. Please try again. (${error.message})` });
+                } finally {
+                    setIsDetecting(false);
+                }
+            };
+
+            const renderContent = () => {
+                switch(activeTab) {
+                    case 'dashboard':
+                        return (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {/* Weather Card */}
+                                <div className="bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl p-6 shadow-lg">
+                                    <h3 className="text-xl font-semibold mb-4">{t.todayWeather}</h3>
+                                    {weatherData.loading ? <p>{t.loading}</p> : weatherData.error ? <p className="text-yellow-200">{weatherData.errorMessage || t.error}</p> : (
+                                        <>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between">
+                                                    <span>{t.temperature}:</span>
+                                                    <span className="font-bold">{weatherData.temperature}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>{t.humidity}:</span>
+                                                    <span className="font-bold">{weatherData.humidity}</span>
+                                                </div>
+                                                <div className="flex justify-between">
+                                                    <span>{t.windSpeed}:</span>
+                                                    <span className="font-bold">{weatherData.windSpeed}</span>
+                                                </div>
+                                            </div>
+                                            <div className="mt-4 text-center">
+                                                <img src={`https://openweathermap.org/img/wn/${weatherData.icon}@2x.png`} alt="weather icon" className="mx-auto h-16 w-16" />
+                                                <p className="mt-2">{weatherData.condition}</p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+
+
+                                {/* Market Prices Card */}
+                                <div className="bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl p-6 shadow-lg">
+                                    <h3 className="text-xl font-semibold mb-4">{t.marketPrices}</h3>
+                                    {marketPrices.loading ? <p>{t.loading}</p> : marketPrices.error ? <p>{t.error}</p> : (
+                                        <div className="space-y-3">
+                                            {marketPrices.data.map((item, index) => (
+                                                <div key={index} className="flex justify-between items-center">
+                                                    <span>{item.commodity}</span>
+                                                    <div className="text-right">
+                                                        <p className="font-bold">{item.price}</p>
+                                                        <p className={`text-xs ${item.trend.startsWith('-') ? 'text-red-200' : 'text-green-200'}`}>
+                                                            {item.trend.startsWith('-') ? '▼' : '▲'} {item.trend}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                     )}
+                                </div>
+
+
+                                {/* Your Crops Card */}
+                                <div className="bg-gradient-to-br from-purple-400 to-purple-600 text-white rounded-xl p-6 shadow-lg">
+                                    <h3 className="text-xl font-semibold mb-4">{t.yourCrops}</h3>
+                                    <div className="space-y-3">
+                                        {userCrops.map((crop, index) => (
+                                            <div key={index} className="bg-white/20 rounded-lg p-3 flex justify-between items-center">
+                                                <div>
+                                                    <p className="font-medium">{crop.name}</p>
+                                                    <p className="text-sm opacity-90">{crop.acres} - {crop.stage}</p>
+                                                </div>
+                                                <button onClick={() => handleDeleteCrop(index)} className="text-white/70 hover:text-white">
+                                                    &#x2715;
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => setIsAddCropModalOpen(true)} className="mt-4 w-full bg-white/20 hover:bg-white/30 rounded-lg py-2 transition-all">
+                                        + {t.addCrop}
+                                    </button>
+                                </div>
+
+                                {/* Quick Actions */}
+                                <div className="bg-white rounded-xl p-6 shadow-lg col-span-full">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-800">Quick Actions</h3>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <button
+                                            onClick={() => setActiveTab('advisory')}
+                                            className="p-4 bg-blue-50 hover:bg-blue-100 rounded-lg transition-all group"
+                                        >
+                                            <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">💬</span>
+                                            <p className="text-sm text-gray-700">{t.cropAdvisory}</p>
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('pest')}
+                                            className="p-4 bg-green-50 hover:bg-green-100 rounded-lg transition-all group"
+                                        >
+                                            <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🐛</span>
+                                            <p className="text-sm text-gray-700">{t.pestDetection}</p>
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('weather')}
+                                            className="p-4 bg-yellow-50 hover:bg-yellow-100 rounded-lg transition-all group"
+                                        >
+                                            <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">🌤️</span>
+                                            <p className="text-sm text-gray-700">{t.weather}</p>
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveTab('market')}
+                                            className="p-4 bg-purple-50 hover:bg-purple-100 rounded-lg transition-all group"
+                                        >
+                                            <span className="text-3xl block mb-2 group-hover:scale-110 transition-transform">💰</span>
+                                            <p className="text-sm text-gray-700">{t.market}</p>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Recent Alerts */}
+                                <div className="bg-white rounded-xl p-6 shadow-lg col-span-full">
+                                    <h3 className="text-xl font-semibold mb-4 text-gray-800">{t.recentAlerts}</h3>
+                                    <div className="space-y-3">
+                                        <div className="flex items-start space-x-3 p-3 bg-yellow-50 rounded-lg">
+                                            <span className="text-2xl">⚠️</span>
+                                            <div>
+                                                <p className="font-medium text-gray-800">Weather Alert</p>
+                                                <p className="text-sm text-gray-600">Heavy rainfall expected in next 48 hours</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-start space-x-3 p-3 bg-green-50 rounded-lg">
+                                            <span className="text-2xl">📈</span>
+                                            <div>
+                                                <p className="font-medium text-gray-800">Market Update</p>
+                                                <p className="text-sm text-gray-600">Wheat prices increased by 5% this week</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 'advisory':
+                        return (
+                            <div className="max-w-4xl mx-auto">
+                                <div className="bg-white rounded-xl shadow-lg h-[600px] flex flex-col">
+                                    {/* Chat Header */}
+                                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-t-xl">
+                                        <h3 className="text-xl font-semibold">{t.cropAdvisory}</h3>
+                                        <p className="text-sm opacity-90">{t.askQuestion}</p>
+                                    </div>
+
+                                    {/* Crop Selection */}
+                                    <div className="p-4 border-b">
+                                        <div className="flex items-center space-x-4">
+                                            <label className="text-sm font-medium text-gray-700">{t.selectCrop}:</label>
+                                            <select
+                                                value={selectedCrop}
+                                                onChange={(e) => setSelectedCrop(e.target.value)}
+                                                className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                            >
+                                                <option value="">{t.selectCrop}</option>
+                                                <option value="wheat">{t.wheat}</option>
+                                                <option value="rice">{t.rice}</option>
+                                                <option value="cotton">{t.cotton}</option>
+                                            </select>
+                                            <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all">
+                                                {t.getAdvice}
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Chat Messages */}
+                                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                                        {messages.length === 0 && (
+                                            <div className="text-center text-gray-500 mt-20">
+                                                <span className="text-6xl block mb-4">🌱</span>
+                                                <p>{t.askQuestion}</p>
+                                            </div>
+                                        )}
+                                        {messages.map((message) => (
+                                            <div
+                                                key={message.id}
+                                                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} chat-message`}
+                                            >
+                                                <div
+                                                    className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg ${
+                                                        message.sender === 'user'
+                                                            ? 'bg-blue-500 text-white'
+                                                            : 'bg-gray-100 text-gray-800'
+                                                    }`}
+                                                >
+                                                    <p>{message.text}</p>
+                                                    <p className={`text-xs mt-1 ${message.sender === 'user' ? 'text-blue-100' : 'text-gray-500'}`}>
+                                                        {message.timestamp}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {isAiReplying && (
+                                            <div className="flex justify-start chat-message">
+                                                <div className="max-w-xs lg:max-w-md px-4 py-3 rounded-lg bg-gray-100 text-gray-800">
+                                                    <div className="typing-indicator">
+                                                        <span></span><span></span><span></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                        <div ref={chatEndRef} />
+                                    </div>
+
+                                    {/* Chat Input */}
+                                    <div className="p-4 border-t">
+                                        <div className="flex space-x-2">
+                                            <button
+                                                onClick={() => setIsRecording(!isRecording)}
+                                                className={`p-3 rounded-lg transition-all ${
+                                                    isRecording
+                                                        ? 'bg-red-500 text-white animate-pulse'
+                                                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                                                }`}
+                                            >
+                                                <span>🎤</span>
+                                            </button>
+                                            <input
+                                                type="text"
+                                                value={inputMessage}
+                                                onChange={(e) => setInputMessage(e.target.value)}
+                                                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                                                placeholder={t.typeMessage}
+                                                className="flex-1 px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                disabled={isAiReplying}
+                                            />
+                                            <button
+                                                onClick={handleSendMessage}
+                                                className="px-6 py-3 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all disabled:bg-blue-300"
+                                                disabled={isAiReplying}
+                                            >
+                                                {t.send}
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 'pest':
+                        return (
+                            <div className="max-w-4xl mx-auto">
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-2xl font-semibold mb-6 text-gray-800">{t.pestDetection}</h3>
+                                    
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        {/* Upload Section */}
+                                        <div>
+                                            <div
+                                                onClick={() => fileInputRef.current?.click()}
+                                                className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center cursor-pointer hover:border-blue-500 transition-all"
+                                            >
+                                                {uploadedImage ? (
+                                                    <img src={uploadedImage} alt="Uploaded" className="max-w-full h-64 mx-auto object-cover rounded" />
+                                                ) : (
+                                                    <>
+                                                        <span className="text-6xl block mb-4">📷</span>
+                                                        <p className="text-gray-600">{t.uploadImage}</p>
+                                                        <p className="text-sm text-gray-400 mt-2">Click to browse or drag and drop</p>
+                                                    </>
+                                                )}
+                                            </div>
+                                            <input
+                                                ref={fileInputRef}
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleImageUpload}
+                                                className="hidden"
+                                            />
+                                            {uploadedImage && (
+                                                <button
+                                                    onClick={handlePestDetection}
+                                                    disabled={isDetecting}
+                                                    className="w-full mt-4 py-3 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all disabled:bg-gray-400"
+                                                >
+                                                    {isDetecting ? t.detecting : t.detectPest}
+                                                </button>
+                                            )}
+                                        </div>
+
+                                        {/* Results Section */}
+                                        <div>
+                                            {isDetecting && (
+                                                <div className="flex items-center justify-center h-full">
+                                                    <div className="text-center">
+                                                        <div className="typing-indicator">
+                                                            <span></span>
+                                                            <span></span>
+                                                            <span></span>
+                                                        </div>
+                                                        <p className="mt-4 text-gray-600">{t.processing}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {detectionResult && !isDetecting && (
+                                                <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6 h-full">
+                                                    <h4 className="text-lg font-semibold text-gray-800 mb-4">Detection Results</h4>
+                                                    <div 
+                                                        className="text-gray-700 space-y-2"
+                                                        dangerouslySetInnerHTML={{ 
+                                                            __html: detectionResult.analysis.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/\n/g, '<br />')
+                                                        }} 
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {!detectionResult && !isDetecting && (
+                                                <div className="bg-blue-50 rounded-lg p-6 h-full">
+                                                    <h4 className="text-lg font-semibold text-gray-800 mb-4">How it works</h4>
+                                                    <ol className="space-y-2 text-sm text-gray-600 list-decimal list-inside">
+                                                        <li>Take a clear photo of the affected plant part</li>
+                                                        <li>Upload the image using the upload area</li>
+                                                        <li>Click "{t.detectPest}" button</li>
+                                                        <li>Get instant AI-powered diagnosis</li>
+                                                        <li>Follow recommended treatment</li>
+                                                    </ol>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 'weather':
+                        return (
+                            <div className="max-w-6xl mx-auto">
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-2xl font-semibold mb-6 text-gray-800">{t.weather} Forecast</h3>
+                                    
+                                    {/* Current Weather */}
+                                    <div className="bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-xl p-8 mb-6">
+                                        <div className="grid md:grid-cols-2 gap-6">
+                                            <div>
+                                                <p className="text-xl opacity-90">Current Conditions</p>
+                                                <p className="text-5xl font-bold mt-2">{weatherData.temperature}</p>
+                                                <p className="text-xl mt-2">{weatherData.condition}</p>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="opacity-90">{t.humidity}</p>
+                                                    <p className="text-2xl font-semibold">{weatherData.humidity}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="opacity-90">{t.windSpeed}</p>
+                                                    <p className="text-2xl font-semibold">{weatherData.windSpeed}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="opacity-90">{t.rainfall}</p>
+                                                    <p className="text-2xl font-semibold">{weatherData.rainfall}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="opacity-90">UV Index</p>
+                                                    <p className="text-2xl font-semibold">6 (High)</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 7-Day Forecast */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+                                        {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, index) => (
+                                            <div key={day} className="bg-gray-50 rounded-lg p-4 text-center hover:bg-gray-100 transition-all">
+                                                <p className="font-medium text-gray-700">{day}</p>
+                                                <span className="text-3xl block my-3">
+                                                    {index < 2 ? '☀️' : index < 4 ? '⛅' : '🌧️'}
+                                                </span>
+                                                <p className="font-semibold">{28 - index}°C</p>
+                                                <p className="text-sm text-gray-500">{20 + index}°C</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    case 'market':
+                        return (
+                            <div className="max-w-6xl mx-auto">
+                                <div className="bg-white rounded-xl shadow-lg p-6">
+                                    <h3 className="text-2xl font-semibold mb-6 text-gray-800">{t.marketPrices}</h3>
+                                    
+                                    {/* Market Table */}
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full">
+                                            <thead>
+                                                <tr className="bg-gray-50">
+                                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Crop</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Current Price</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Yesterday</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Change</th>
+                                                    <th className="px-4 py-3 text-left text-sm font-medium text-gray-700">Market</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-200">
+                                                {marketPrices.data && marketPrices.data.map((item, index) => (
+                                                    <tr key={index} className="hover:bg-gray-50">
+                                                        <td className="px-4 py-4 font-medium">{item.commodity}</td>
+                                                        <td className="px-4 py-4 font-semibold">{item.price}</td>
+                                                        <td className="px-4 py-4">₹2,100/quintal</td>
+                                                        <td className="px-4 py-4">
+                                                            <span className={`px-2 py-1 rounded text-sm font-medium ${
+                                                                item.trend.startsWith('-') 
+                                                                    ? 'bg-red-100 text-red-800' 
+                                                                    : 'bg-green-100 text-green-800'
+                                                            }`}>
+                                                                {item.trend}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-4">Amritsar Mandi</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                    {/* Price Chart Placeholder */}
+                                    <div className="mt-6 bg-gray-50 rounded-lg p-6">
+                                        <h4 className="text-lg font-semibold mb-4">Price Trends (Last 30 Days)</h4>
+                                        <div className="h-64 flex items-center justify-center bg-white rounded">
+                                            <p className="text-gray-500">📊 Price chart visualization</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+
+                    default:
+                        return null;
+                }
+            };
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <AddCropModal 
+                        isOpen={isAddCropModalOpen}
+                        onClose={() => setIsAddCropModalOpen(false)}
+                        onAddCrop={handleAddCrop}
+                        t={t}
+                    />
+                    {/* Header */}
+                    <header className="bg-white shadow-sm border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex justify-between items-center h-16">
+                                <div className="flex items-center">
+                                    <span className="text-2xl mr-3">🌾</span>
+                                    <h1 className="text-xl font-bold text-gray-800">AgroAI</h1>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                    <span className="text-sm text-gray-600">👤 {userName}</span>
+                                    <button
+                                        onClick={onLogout}
+                                        className="text-sm text-red-600 hover:text-red-700"
+                                    >
+                                        {t.logout}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    {/* Navigation */}
+                    <nav className="bg-white border-b">
+                        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                            <div className="flex space-x-8 overflow-x-auto">
+                                {[
+                                    { id: 'dashboard', icon: '📊', label: t.dashboard },
+                                    { id: 'advisory', icon: '💬', label: t.cropAdvisory },
+                                    { id: 'pest', icon: '🐛', label: t.pestDetection },
+                                    { id: 'weather', icon: '🌤️', label: t.weather },
+                                    { id: 'market', icon: '💰', label: t.market },
+                                    { id: 'community', icon: '👥', label: t.community }
+                                ].map((tab) => (
+                                    <button
+                                        key={tab.id}
+                                        onClick={() => setActiveTab(tab.id)}
+                                        className={`flex items-center space-x-2 py-4 px-1 border-b-2 transition-all ${
+                                            activeTab === tab.id
+                                                ? 'border-purple-500 text-purple-600'
+                                                : 'border-transparent text-gray-500 hover:text-gray-700'
+                                        }`}
+                                    >
+                                        <span>{tab.icon}</span>
+                                        <span className="font-medium">{tab.label}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Main Content */}
+                    <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                        {renderContent()}
+                    </main>
+                </div>
+            );
+        }
+
+        // Render the app
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
+
