@@ -75,6 +75,7 @@
                 verifyOTP: "Verify OTP",
                 enterOTP: "Enter 6-digit OTP",
                 selectLanguage: "Select Your Preferred Language",
+                selectDistrict: "Select Your District in Punjab",
                 continue: "Continue",
                 resendOTP: "Resend OTP",
                 dashboard: "Dashboard",
@@ -89,8 +90,8 @@
                 typeMessage: "Type your message or use voice...",
                 uploadImage: "Upload Crop Image",
                 detectPest: "Detect Pest/Disease",
-                todayWeather: "Today's Weather in Ludhiana",
-                marketPrices: "Market Prices (Ludhiana Mandi)",
+                todayWeather: "Today's Weather",
+                marketPrices: "Market Prices",
                 recentAlerts: "Recent Alerts",
                 yourCrops: "Your Crops",
                 farmLocation: "Farm Location",
@@ -131,6 +132,7 @@
                 verifyOTP: "OTP सत्यापित करें",
                 enterOTP: "6 अंकों का OTP दर्ज करें",
                 selectLanguage: "अपनी पसंदीदा भाषा चुनें",
+                selectDistrict: "पंजाब में अपना जिला चुनें",
                 continue: "जारी रखें",
                 resendOTP: "OTP पुनः भेजें",
                 dashboard: "डैशबोर्ड",
@@ -145,8 +147,8 @@
                 typeMessage: "अपना संदेश टाइप करें या आवाज का उपयोग करें...",
                 uploadImage: "फसल की तस्वीर अपलोड करें",
                 detectPest: "कीट/रोग की पहचान करें",
-                todayWeather: "लुधियाना में आज का मौसम",
-                marketPrices: "बाजार भाव (लुधियाना मंडी)",
+                todayWeather: "आज का मौसम",
+                marketPrices: "बाजार भाव",
                 recentAlerts: "हाल की चेतावनियां",
                 yourCrops: "आपकी फसलें",
                 farmLocation: "खेत का स्थान",
@@ -187,6 +189,7 @@
                 verifyOTP: "OTP ਪੁਸ਼ਟੀ ਕਰੋ",
                 enterOTP: "6 ਅੰਕਾਂ ਦਾ OTP ਦਾਖਲ ਕਰੋ",
                 selectLanguage: "ਆਪਣੀ ਪਸੰਦੀਦਾ ਭਾਸ਼ਾ ਚੁਣੋ",
+                selectDistrict: "ਪੰਜਾਬ ਵਿੱਚ ਆਪਣਾ ਜ਼ਿਲ੍ਹਾ ਚੁਣੋ",
                 continue: "ਜਾਰੀ ਰੱਖੋ",
                 resendOTP: "OTP ਦੁਬਾਰਾ ਭੇਜੋ",
                 dashboard: "ਡੈਸ਼ਬੋਰਡ",
@@ -201,8 +204,8 @@
                 typeMessage: "ਆਪਣਾ ਸੁਨੇਹਾ ਟਾਈਪ ਕਰੋ ਜਾਂ ਆਵਾਜ਼ ਵਰਤੋ...",
                 uploadImage: "ਫਸਲ ਦੀ ਤਸਵੀਰ ਅਪਲੋਡ ਕਰੋ",
                 detectPest: "ਕੀੜੇ/ਰੋਗ ਦੀ ਪਛਾਣ ਕਰੋ",
-                todayWeather: "ਲੁਧਿਆਣਾ ਵਿੱਚ ਅੱਜ ਦਾ ਮੌਸਮ",
-                marketPrices: "ਮੰਡੀ ਭਾਅ (ਲੁਧਿਆਣਾ ਮੰਡੀ)",
+                todayWeather: "ਅੱਜ ਦਾ ਮੌਸਮ",
+                marketPrices: "ਮੰਡੀ ਭਾਅ",
                 recentAlerts: "ਤਾਜ਼ਾ ਚੇਤਾਵਨੀਆਂ",
                 yourCrops: "ਤੁਹਾਡੀਆਂ ਫਸਲਾਂ",
                 farmLocation: "ਖੇਤ ਦਾ ਸਥਾਨ",
@@ -239,10 +242,11 @@
         // Main App Component
         function App() {
             const [isAuthenticated, setIsAuthenticated] = useState(false);
-            const [currentStep, setCurrentStep] = useState('phone'); // phone, otp, language, dashboard
+            const [currentStep, setCurrentStep] = useState('phone'); // phone, otp, language, district, dashboard
             const [phoneNumber, setPhoneNumber] = useState('');
             const [otp, setOtp] = useState('');
             const [language, setLanguage] = useState('en');
+            const [district, setDistrict] = useState('');
             const [userName, setUserName] = useState('');
             const t = translations[language];
 
@@ -262,6 +266,11 @@
 
             const handleLanguageSelect = (lang) => {
                 setLanguage(lang);
+                setCurrentStep('district');
+            };
+
+            const handleDistrictSelect = (selectedDistrict) => {
+                setDistrict(selectedDistrict);
                 setIsAuthenticated(true);
                 setCurrentStep('dashboard');
                 setUserName('Farmer_' + phoneNumber.slice(-4));
@@ -272,6 +281,7 @@
                 setCurrentStep('phone');
                 setPhoneNumber('');
                 setOtp('');
+                setDistrict('');
             };
 
             if (!isAuthenticated) {
@@ -384,12 +394,38 @@
                                     </div>
                                 </div>
                             )}
+
+                            {/* District Selection Step */}
+                            {currentStep === 'district' && (
+                                <div className="space-y-4">
+                                    <h2 className="text-xl font-semibold text-gray-800 text-center mb-6">
+                                        {t.selectDistrict}
+                                    </h2>
+                                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {[
+                                            'Amritsar', 'Barnala', 'Bathinda', 'Faridkot', 'Fatehgarh Sahib',
+                                            'Fazilka', 'Ferozepur', 'Gurdaspur', 'Hoshiarpur', 'Jalandhar',
+                                            'Kapurthala', 'Ludhiana', 'Mansa', 'Moga', 'Muktsar',
+                                            'Pathankot', 'Patiala', 'Rupnagar', 'Sahibzada Ajit Singh Nagar',
+                                            'Sangrur', 'Shaheed Bhagat Singh Nagar', 'Tarn Taran'
+                                        ].map((districtName) => (
+                                            <button
+                                                key={districtName}
+                                                onClick={() => handleDistrictSelect(districtName)}
+                                                className="w-full py-3 px-4 bg-white border-2 border-purple-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-left group"
+                                            >
+                                                <span className="text-base font-medium">{districtName}</span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 );
             }
 
-            return <Dashboard language={language} userName={userName} onLogout={handleLogout} />;
+            return <Dashboard language={language} district={district} userName={userName} onLogout={handleLogout} />;
         }
 
         // Add Crop Modal Component
@@ -453,7 +489,7 @@
         }
 
         // Dashboard Component
-        function Dashboard({ language, userName, onLogout }) {
+        function Dashboard({ language, district, userName, onLogout }) {
             const [activeTab, setActiveTab] = useState('dashboard');
             const [messages, setMessages] = useState([]);
             const [inputMessage, setInputMessage] = useState('');
@@ -478,8 +514,37 @@
             const OPENWEATHER_API_KEY = 'a6480846a86998d90a2038d82607f795';
             const MARKET_API_KEY = '579b464db66ec23bdd0000014a71fb9b493b4afc704174853be98d35';
             
+            // District coordinates for Punjab
+            const getDistrictCoordinates = (districtName) => {
+                const coordinates = {
+                    'Amritsar': { lat: 31.6340, lon: 74.8723 },
+                    'Barnala': { lat: 30.3785, lon: 75.5457 },
+                    'Bathinda': { lat: 30.2110, lon: 74.9455 },
+                    'Faridkot': { lat: 30.6704, lon: 74.7597 },
+                    'Fatehgarh Sahib': { lat: 30.6466, lon: 76.3956 },
+                    'Fazilka': { lat: 30.4037, lon: 74.0246 },
+                    'Ferozepur': { lat: 30.9233, lon: 74.6133 },
+                    'Gurdaspur': { lat: 32.0422, lon: 75.4035 },
+                    'Hoshiarpur': { lat: 31.5338, lon: 75.9115 },
+                    'Jalandhar': { lat: 31.3260, lon: 75.5762 },
+                    'Kapurthala': { lat: 31.3800, lon: 75.3800 },
+                    'Ludhiana': { lat: 30.9010, lon: 75.8573 },
+                    'Mansa': { lat: 29.9836, lon: 75.3936 },
+                    'Moga': { lat: 30.8176, lon: 75.1724 },
+                    'Muktsar': { lat: 30.4762, lon: 74.5165 },
+                    'Pathankot': { lat: 32.2746, lon: 75.6505 },
+                    'Patiala': { lat: 30.3396, lon: 76.3922 },
+                    'Rupnagar': { lat: 30.9692, lon: 76.5267 },
+                    'Sahibzada Ajit Singh Nagar': { lat: 30.6802, lon: 76.7274 },
+                    'Sangrur': { lat: 30.2459, lon: 75.8421 },
+                    'Shaheed Bhagat Singh Nagar': { lat: 31.1048, lon: 76.2349 },
+                    'Tarn Taran': { lat: 31.4516, lon: 74.9255 }
+                };
+                return coordinates[districtName] || coordinates['Ludhiana']; // Default to Ludhiana if not found
+            };
+            
             useEffect(() => {
-                // --- Fetch Weather Data for Ludhiana, Punjab ---
+                // --- Fetch Weather Data for Selected District ---
                 const fetchWeather = async () => {
                     if (OPENWEATHER_API_KEY === 'YOUR_OPENWEATHERMAP_API_KEY') {
                         console.error("OpenWeatherMap API key is missing.");
@@ -487,8 +552,9 @@
                         return;
                     }
 
-                    const lat = 30.9010; // Ludhiana Latitude
-                    const lon = 75.8573; // Ludhiana Longitude
+                    const coords = getDistrictCoordinates(district);
+                    const lat = coords.lat;
+                    const lon = coords.lon;
                     try {
                         const response = await fetch(`https://api.openweathermap.org/data/2.5/weather?lat=${lat}&lon=${lon}&appid=${OPENWEATHER_API_KEY}&units=metric`);
                         if (!response.ok) throw new Error('Weather data fetch failed. Check if your API key is valid.');
@@ -528,7 +594,14 @@
                      }
 
                     try {
-                        const response = await fetch(`https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070?api-key=${MARKET_API_KEY}&format=json&filters[market]=Ludhiana&limit=10`);
+                        // Map district names to match API format
+                        const districtMapping = {
+                            'Bathinda': 'Bhatinda',
+                            'Rupnagar': 'Ropar (Rupnagar)',
+                            'Tarn Taran': 'Tarntaran'
+                        };
+                        const apiDistrictName = districtMapping[district] || district;
+                        const response = await fetch(`https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070?api-key=${MARKET_API_KEY}&format=json&filters[district]=${apiDistrictName}&limit=10`);
                         if (!response.ok) throw new Error('Market data fetch failed');
                         const apiData = await response.json();
 
@@ -554,7 +627,7 @@
 
                 fetchWeather();
                 fetchMarketPrices();
-            }, [language]);
+            }, [language, district]);
 
 
             useEffect(() => {
@@ -584,11 +657,11 @@
                     setIsAiReplying(true);
 
                     // --- Gemini API Call ---
-                    const apiKey = ""; // Left blank, will be provided by the environment
+                    const apiKey = "AIzaSyBmUMvsHx6kxUrBelt5WKth9Nrv6_crbtA";
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
                     
                     const langName = { en: 'English', hi: 'Hindi', pa: 'Punjabi' }[language];
-                    const prompt = `You are AgroAI, an expert agricultural assistant. Provide a helpful and concise answer for the following question from a farmer. If the question is a simple greeting, respond with a friendly greeting. The farmer is asking about ${selectedCrop || 'their crops'}. Please respond in ${langName}.\n\nQuestion: "${currentInput}"`;
+                    const prompt = `You are AgroAI, an expert agricultural assistant. Provide a helpful and concise answer for the following question from a farmer. If the question is a simple greeting, respond with a friendly greeting. Please respond in ${langName}.\n\nQuestion: "${currentInput}"`;
 
                     const payload = {
                         contents: [{ parts: [{ text: prompt }] }],
@@ -649,7 +722,7 @@
                 setDetectionResult(null);
 
                 try {
-                    const apiKey = ""; // Provided by environment
+                    const apiKey = "AIzaSyBmUMvsHx6kxUrBelt5WKth9Nrv6_crbtA";
                     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent?key=${apiKey}`;
 
                     // Extract base64 data and mimeType from the data URL
@@ -707,7 +780,7 @@
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                 {/* Weather Card */}
                                 <div className="bg-gradient-to-br from-blue-400 to-blue-600 text-white rounded-xl p-6 shadow-lg">
-                                    <h3 className="text-xl font-semibold mb-4">{t.todayWeather}</h3>
+                                    <h3 className="text-xl font-semibold mb-4">{t.todayWeather} in {district}</h3>
                                     {weatherData.loading ? <p>{t.loading}</p> : weatherData.error ? <p className="text-yellow-200">{weatherData.errorMessage || t.error}</p> : (
                                         <>
                                             <div className="space-y-2">
@@ -735,7 +808,12 @@
 
                                 {/* Market Prices Card */}
                                 <div className="bg-gradient-to-br from-green-400 to-green-600 text-white rounded-xl p-6 shadow-lg">
-                                    <h3 className="text-xl font-semibold mb-4">{t.marketPrices}</h3>
+                                    <h3 className="text-xl font-semibold mb-4">
+                                        {t.marketPrices} ({district})
+                                        {marketPrices.data && marketPrices.data.length > 0 && (
+                                            <span className="text-sm ml-2 px-2 py-1 bg-green-200 text-green-800 rounded">Live Data</span>
+                                        )}
+                                    </h3>
                                     {marketPrices.loading ? <p>{t.loading}</p> : marketPrices.error ? <p>{t.error}</p> : (
                                         <div className="space-y-3">
                                             {marketPrices.data.map((item, index) => (
@@ -843,25 +921,7 @@
                                         <p className="text-sm opacity-90">{t.askQuestion}</p>
                                     </div>
 
-                                    {/* Crop Selection */}
-                                    <div className="p-4 border-b">
-                                        <div className="flex items-center space-x-4">
-                                            <label className="text-sm font-medium text-gray-700">{t.selectCrop}:</label>
-                                            <select
-                                                value={selectedCrop}
-                                                onChange={(e) => setSelectedCrop(e.target.value)}
-                                                className="px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500"
-                                            >
-                                                <option value="">{t.selectCrop}</option>
-                                                <option value="wheat">{t.wheat}</option>
-                                                <option value="rice">{t.rice}</option>
-                                                <option value="cotton">{t.cotton}</option>
-                                            </select>
-                                            <button className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all">
-                                                {t.getAdvice}
-                                            </button>
-                                        </div>
-                                    </div>
+
 
                                     {/* Chat Messages */}
                                     <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -1033,7 +1093,7 @@
                                     <div className="bg-gradient-to-r from-blue-400 to-blue-600 text-white rounded-xl p-8 mb-6">
                                         <div className="grid md:grid-cols-2 gap-6">
                                             <div>
-                                                <p className="text-xl opacity-90">Current Conditions</p>
+                                                <p className="text-xl opacity-90">Current Conditions in {district}</p>
                                                 <p className="text-5xl font-bold mt-2">{weatherData.temperature}</p>
                                                 <p className="text-xl mt-2">{weatherData.condition}</p>
                                             </div>
