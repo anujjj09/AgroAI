@@ -452,27 +452,30 @@ app.get('/api/market/:district', async (req, res) => {
   }
 });
 
-// AI Chat (integrate with actual AI service later)
+// AI Chat - Intelligent Agricultural Assistant
 app.post('/api/ai/chat', authenticateToken, async (req, res) => {
   try {
     const { message } = req.body;
     
+    if (!message || message.trim().length === 0) {
+      return res.status(400).json({
+        error: 'Message is required',
+        message: 'Please provide a message for the AI assistant'
+      });
+    }
+    
     // Get user context
     const user = await User.findByPk(req.user.userId);
+    const userMessage = message.toLowerCase().trim();
+    const district = user.district || 'Punjab';
+    const language = user.preferred_language || 'en';
     
-    const responses = [
-      `Based on your location in ${user.district || 'Punjab'}, I recommend planting wheat in October-November for best results.`,
-      `For better crop yield in ${user.district || 'your area'}, ensure proper irrigation and use organic fertilizers.`,
-      "The weather conditions are favorable for sowing. Consider soil preparation first.",
-      "Monitor your crops for pest attacks, especially during monsoon season.",
-      `In ${user.district || 'Punjab'}, rice cultivation is most profitable during June-July planting season.`
-    ];
-    
-    const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+    // Intelligent response system based on user input
+    let response = generateIntelligentResponse(userMessage, district, language);
     
     res.status(200).json({
       success: true,
-      response: randomResponse,
+      response: response,
       timestamp: new Date().toISOString(),
       context: {
         district: user.district,
@@ -486,6 +489,162 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
     });
   }
 });
+
+// Intelligent response generation function
+function generateIntelligentResponse(userMessage, district, language) {
+  // Convert message to lowercase for better matching
+  const msg = userMessage.toLowerCase();
+  
+  // Weather-related queries
+  if (msg.includes('weather') || msg.includes('rain') || msg.includes('temperature') || msg.includes('climate')) {
+    const weatherResponses = [
+      `Based on current weather patterns in ${district}, I recommend monitoring soil moisture levels and adjusting irrigation accordingly.`,
+      `The weather in ${district} affects crop growth significantly. Make sure to protect your crops from unexpected weather changes.`,
+      `Weather conditions in ${district} are crucial for farming decisions. Check weather forecasts before planning field activities.`,
+      `Current weather patterns suggest optimal conditions for certain crops in ${district}. Consider seasonal variations in your planning.`
+    ];
+    return weatherResponses[Math.floor(Math.random() * weatherResponses.length)];
+  }
+  
+  // Crop-specific queries
+  if (msg.includes('wheat') || msg.includes('gehu')) {
+    return `For wheat cultivation in ${district}: Plant in November-December, ensure proper seed treatment, apply balanced fertilizers (120kg N, 60kg P2O5, 40kg K2O per hectare), and maintain adequate moisture during grain filling stage. Harvest typically occurs in April-May.`;
+  }
+  
+  if (msg.includes('rice') || msg.includes('dhan') || msg.includes('paddy')) {
+    return `Rice farming in ${district}: Transplant nursery seedlings in June-July, maintain 2-5cm water level, apply nitrogen in 3 splits, watch for brown plant hopper and stem borer. Expected harvest in October-November.`;
+  }
+  
+  if (msg.includes('cotton') || msg.includes('kapas')) {
+    return `Cotton cultivation in ${district}: Sow in April-May, maintain plant spacing of 67.5cm x 23cm, apply adequate phosphorus at planting, monitor for bollworm and whitefly. Pick cotton when bolls are fully opened.`;
+  }
+  
+  if (msg.includes('maize') || msg.includes('corn') || msg.includes('makka')) {
+    return `Maize growing tips for ${district}: Plant after soil temperature reaches 15°C, ensure proper drainage, apply 150kg N + 75kg P2O5 + 40kg K2O per hectare. Watch for fall armyworm and stem borer.`;
+  }
+  
+  if (msg.includes('sugarcane') || msg.includes('ganna')) {
+    return `Sugarcane cultivation in ${district}: Plant in February-March or October-November, use healthy setts, apply 300kg N + 125kg P2O5 + 125kg K2O per hectare in splits. Harvest after 12-14 months.`;
+  }
+  
+  // Fertilizer and nutrient queries
+  if (msg.includes('fertilizer') || msg.includes('urea') || msg.includes('nutrient') || msg.includes('nitrogen') || msg.includes('phosphorus')) {
+    const fertilizerResponses = [
+      `For balanced nutrition in ${district}, use soil testing to determine exact fertilizer needs. Generally apply NPK in 4:2:1 ratio for most crops.`,
+      `Organic fertilizers like FYM and compost improve soil health in ${district}. Apply 10-15 tonnes per hectare before sowing.`,
+      `Micronutrients like zinc and iron are often deficient in ${district} soils. Consider foliar application of micronutrient mix.`,
+      `Proper fertilizer timing is crucial - apply phosphorus at sowing, nitrogen in splits, and potassium as per crop requirements.`
+    ];
+    return fertilizerResponses[Math.floor(Math.random() * fertilizerResponses.length)];
+  }
+  
+  // Pest and disease queries
+  if (msg.includes('pest') || msg.includes('insect') || msg.includes('disease') || msg.includes('bug') || msg.includes('aphid') || msg.includes('borer')) {
+    const pestResponses = [
+      `For pest management in ${district}, use Integrated Pest Management (IPM) - combine biological controls, resistant varieties, and judicious use of pesticides.`,
+      `Monitor your crops weekly for pest damage. Early detection is key. Use yellow sticky traps for flying insects and pheromone traps for moths.`,
+      `Common pests in ${district} include aphids, bollworms, and stem borers. Use neem-based products for organic control or consult with agricultural extension officer.`,
+      `Disease management: Ensure proper crop rotation, use certified seeds, maintain field hygiene, and apply fungicides only when necessary.`
+    ];
+    return pestResponses[Math.floor(Math.random() * pestResponses.length)];
+  }
+  
+  // Irrigation and water management
+  if (msg.includes('irrigation') || msg.includes('water') || msg.includes('drought') || msg.includes('moisture')) {
+    const irrigationResponses = [
+      `Efficient irrigation in ${district}: Use drip or sprinkler systems to save water. Apply water at critical growth stages like flowering and grain filling.`,
+      `Water management is crucial in ${district}. Monitor soil moisture at 15cm depth. Generally, irrigate when soil moisture drops to 70% of field capacity.`,
+      `Consider water harvesting techniques like farm ponds and check dams. Mulching helps retain soil moisture and reduce irrigation frequency.`,
+      `Proper drainage is as important as irrigation in ${district}. Ensure fields don't get waterlogged during monsoon season.`
+    ];
+    return irrigationResponses[Math.floor(Math.random() * irrigationResponses.length)];
+  }
+  
+  // Soil health queries
+  if (msg.includes('soil') || msg.includes('ph') || msg.includes('organic matter') || msg.includes('erosion')) {
+    const soilResponses = [
+      `Soil health in ${district}: Test soil pH annually. Most crops prefer pH 6.0-7.5. Add lime if too acidic or gypsum if too alkaline.`,
+      `Improve soil organic matter by adding compost, green manures, and crop residues. This enhances water retention and nutrient availability.`,
+      `Prevent soil erosion in ${district} through contour farming, terracing, and maintaining vegetative cover. Avoid over-tillage.`,
+      `Regular soil testing helps optimize fertilizer use. Test for NPK, micronutrients, pH, and organic carbon every 2-3 years.`
+    ];
+    return soilResponses[Math.floor(Math.random() * soilResponses.length)];
+  }
+  
+  // Market and price queries
+  if (msg.includes('price') || msg.includes('market') || msg.includes('sell') || msg.includes('msp') || msg.includes('procurement')) {
+    const marketResponses = [
+      `Market prices in ${district} vary seasonally. Check local mandi rates regularly. Consider value addition and direct marketing for better prices.`,
+      `MSP (Minimum Support Price) is announced by government annually. Register with local procurement agencies to sell at MSP rates.`,
+      `Timing of sale is crucial for better prices in ${district}. Store produce properly to avoid post-harvest losses and get better rates.`,
+      `Explore farmer producer organizations (FPOs) in ${district} for collective bargaining and better market access.`
+    ];
+    return marketResponses[Math.floor(Math.random() * marketResponses.length)];
+  }
+  
+  // Machinery and equipment
+  if (msg.includes('tractor') || msg.includes('machine') || msg.includes('equipment') || msg.includes('harvest') || msg.includes('planting')) {
+    const machineryResponses = [
+      `Farm mechanization in ${district}: Use appropriate machinery for different operations. Rent equipment through custom hiring centers if purchase isn't viable.`,
+      `Proper maintenance of farm equipment increases efficiency. Clean and service machines regularly, especially before and after crop seasons.`,
+      `Consider precision farming tools like GPS-guided tractors and variable rate applicators for efficient input use in ${district}.`,
+      `Harvesting at right time is crucial. Use combine harvesters for cereals and ensure proper grain moisture before storage.`
+    ];
+    return machineryResponses[Math.floor(Math.random() * machineryResponses.length)];
+  }
+  
+  // Financial and subsidy queries
+  if (msg.includes('loan') || msg.includes('subsidy') || msg.includes('insurance') || msg.includes('credit') || msg.includes('scheme')) {
+    const financialResponses = [
+      `Agricultural loans in ${district}: Approach cooperative banks, regional rural banks, or commercial banks. Maintain good credit history for easy access.`,
+      `Crop insurance protects against weather risks. Enroll in Pradhan Mantri Fasal Bima Yojana (PMFBY) for comprehensive coverage.`,
+      `Government subsidies are available for seeds, fertilizers, and farm equipment in ${district}. Contact local agriculture department for details.`,
+      `KCC (Kisan Credit Card) provides flexible credit for farming needs. Apply through banks with required documents and land records.`
+    ];
+    return financialResponses[Math.floor(Math.random() * financialResponses.length)];
+  }
+  
+  // General farming queries
+  if (msg.includes('farming') || msg.includes('agriculture') || msg.includes('crop') || msg.includes('cultivation')) {
+    const generalResponses = [
+      `Successful farming in ${district} requires proper planning, soil management, timely operations, and market linkages. Focus on sustainable practices.`,
+      `Crop diversification reduces risks in ${district}. Grow a mix of cereals, legumes, and cash crops based on local conditions and market demand.`,
+      `Extension services in ${district} provide valuable guidance. Attend farmer training programs and demonstrations organized by agriculture department.`,
+      `Keep farm records for better decision-making. Track expenses, yields, and profits to identify profitable crops and practices for ${district}.`
+    ];
+    return generalResponses[Math.floor(Math.random() * generalResponses.length)];
+  }
+  
+  // Technology and innovation queries  
+  if (msg.includes('technology') || msg.includes('app') || msg.includes('digital') || msg.includes('smart farming')) {
+    const techResponses = [
+      `Digital farming in ${district}: Use weather apps, soil health cards, and market price apps for informed decision-making.`,
+      `Precision agriculture technologies like drones and sensors can optimize input use and increase productivity in ${district}.`,
+      `Mobile apps help access real-time information on weather, markets, and advisory services. Stay connected with agricultural innovations.`,
+      `Smart farming techniques include automated irrigation, GPS guidance, and data-driven crop management for efficient farming in ${district}.`
+    ];
+    return techResponses[Math.floor(Math.random() * techResponses.length)];
+  }
+  
+  // Greeting responses
+  if (msg.includes('hello') || msg.includes('hi') || msg.includes('hey') || msg.includes('namaste')) {
+    return `Hello! I'm your AI farming assistant for ${district}. I can help you with crop cultivation, pest management, irrigation, fertilizers, market prices, and general farming advice. What would you like to know?`;
+  }
+  
+  if (msg.includes('help') || msg.includes('what can you do')) {
+    return `I can assist you with: 🌾 Crop cultivation advice 🐛 Pest & disease management 💧 Irrigation guidance 🧪 Fertilizer recommendations 📈 Market information 🚜 Farm machinery advice 💰 Financial schemes. Ask me anything about farming in ${district}!`;
+  }
+  
+  // Default response for unrecognized queries
+  const defaultResponses = [
+    `I understand you're asking about "${userMessage}". For specific agricultural guidance in ${district}, I recommend consulting with your local agricultural extension officer or visiting the nearest Krishi Vigyan Kendra.`,
+    `That's an interesting question about "${userMessage}". While I can provide general farming advice for ${district}, for detailed technical guidance, please contact agricultural experts in your area.`,
+    `Thanks for your question about "${userMessage}". For the most accurate advice for your specific situation in ${district}, I suggest speaking with local farming experts or agricultural scientists.`,
+    `I'd be happy to help with your farming questions in ${district}. Could you be more specific about crops, pests, irrigation, fertilizers, or other farming aspects you'd like to know about?`
+  ];
+  
+  return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
+}
 
 // Pest Detection with Image Analysis
 app.post('/api/ai/pest-detection', authenticateToken, async (req, res) => {

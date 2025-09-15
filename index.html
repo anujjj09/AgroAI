@@ -293,28 +293,7 @@
             border: 1px solid #e1e5e9;
         }
         
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-            font-size: 1.1rem;
-        }
-        
-        .loading::after {
-            content: '';
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 2px solid #667eea;
-            border-radius: 50%;
-            border-top-color: transparent;
-            animation: spin 1s linear infinite;
-            margin-left: 10px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
+
         
         .alert {
             padding: 15px 20px;
@@ -571,8 +550,8 @@
                             <i class="fas fa-info-circle"></i> Real-time weather data to help plan your farming activities
                         </p>
                     </div>
-                    <div id="weatherData" class="loading">
-                        <i class="fas fa-spinner fa-spin"></i> Loading farm weather conditions...
+                    <div id="weatherData">
+                        <!-- Weather data will be loaded here -->
                     </div>
                 </div>
             </div>
@@ -588,8 +567,8 @@
                             <i class="fas fa-rupee-sign"></i> Live mandi prices from Punjab markets
                         </p>
                     </div>
-                    <div id="marketData" class="loading">
-                        <i class="fas fa-spinner fa-spin"></i> Loading current crop prices...
+                    <div id="marketData">
+                        <!-- Market data will be loaded here -->
                     </div>
                 </div>
             </div>
