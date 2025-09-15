@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import Navbar from '../components/Navbar';
-import WeatherTab from '../components/WeatherTab';
-import MarketTab from '../components/MarketTab';
-import ChatTab from '../components/ChatTab';
-import PestTab from '../components/PestTab';
+import WeatherTab from './WeatherTab';
+import MarketTab from './MarketTab';
+import ChatTab from './ChatTab';
+import PestTab from './PestTab';
 
 const Dashboard = ({ user, token, onLogout }) => {
   const [activeTab, setActiveTab] = useState('weather');
