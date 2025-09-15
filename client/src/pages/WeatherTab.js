@@ -1,11 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 
 const WeatherTab = ({ user }) => {
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchWeatherData = async () => {
+  const fetchWeatherData = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -41,11 +41,11 @@ const WeatherTab = ({ user }) => {
       setError('Failed to fetch weather data');
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     fetchWeatherData();
-  }, []);
+  }, [fetchWeatherData]);
 
   if (loading) {
     return (
