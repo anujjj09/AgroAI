@@ -1,0 +1,17 @@
+# Environment variables
+backend/.env
+
+# Dependencies
+backend/node_modules/
+
+# System files
+.DS_Store
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
