@@ -31,3 +31,17 @@ export const apiCall = async (endpoint, options = {}) => {
     throw error;
   }
 };
+
+// Export API object with common HTTP methods
+export const API = {
+  get: (endpoint) => apiCall(endpoint, { method: 'GET' }),
+  post: (endpoint, data) => apiCall(endpoint, { 
+    method: 'POST', 
+    body: JSON.stringify(data) 
+  }),
+  put: (endpoint, data) => apiCall(endpoint, { 
+    method: 'PUT', 
+    body: JSON.stringify(data) 
+  }),
+  delete: (endpoint) => apiCall(endpoint, { method: 'DELETE' })
+};
