@@ -1,9 +1,0 @@
-{
-  "name": "agroai-frontend",
-  "version": "1.0.0",
-  "description": "AgroAI Frontend - Smart Farming Intelligence",
-  "scripts": {
-    "build": "echo 'No build step needed for static HTML'",
-    "start": "python -m http.server 3000 || python3 -m http.server 3000 || npx http-server -p 3000"
-  }
-}
