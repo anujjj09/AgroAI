@@ -11,23 +11,20 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize Sequelize with PostgreSQL
-const sequelize = new Sequelize(
-  process.env.DB_NAME || 'agroai',
-  process.env.DB_USER || 'postgres',
-  process.env.DB_PASSWORD || 'password',
-  {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
-    dialect: 'postgres',
-    logging: console.log,
-    pool: {
-      max: 5,
-      min: 0,
-      acquire: 30000,
-      idle: 10000
+const { Sequelize } = require("sequelize");
+
+const sequelize = new Sequelize(process.env.DATABASE_URL, {
+  dialect: "postgres",
+  protocol: "postgres",
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false
     }
   }
-);
+});
+
+
 
 // Initialize Twilio
 let twilioClient = null;
