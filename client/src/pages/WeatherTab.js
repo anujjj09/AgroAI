@@ -1,14 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { API } from '../utils/api';
 
 const WeatherTab = ({ user }) => {
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    fetchWeatherData();
-  }, [user]);
 
   const fetchWeatherData = async () => {
     try {
@@ -47,6 +42,10 @@ const WeatherTab = ({ user }) => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchWeatherData();
+  }, []);
 
   if (loading) {
     return (
