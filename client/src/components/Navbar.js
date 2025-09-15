@@ -1,8 +1,7 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 
 const Navbar = ({ user, onLogout }) => {
-  const location = useLocation();
 
   return (
     <nav className="navbar">
@@ -15,42 +14,10 @@ const Navbar = ({ user, onLogout }) => {
         <div className="nav-links">
           <Link 
             to="/dashboard" 
-            className={location.pathname === '/dashboard' ? 'nav-link active' : 'nav-link'}
+            className="nav-link active"
           >
             <i className="fas fa-tachometer-alt"></i>
-            Dashboard
-          </Link>
-          
-          <Link 
-            to="/weather" 
-            className={location.pathname === '/weather' ? 'nav-link active' : 'nav-link'}
-          >
-            <i className="fas fa-cloud-sun"></i>
-            Weather
-          </Link>
-          
-          <Link 
-            to="/market" 
-            className={location.pathname === '/market' ? 'nav-link active' : 'nav-link'}
-          >
-            <i className="fas fa-chart-line"></i>
-            Market
-          </Link>
-          
-          <Link 
-            to="/chat" 
-            className={location.pathname === '/chat' ? 'nav-link active' : 'nav-link'}
-          >
-            <i className="fas fa-robot"></i>
-            AI Chat
-          </Link>
-          
-          <Link 
-            to="/pest" 
-            className={location.pathname === '/pest' ? 'nav-link active' : 'nav-link'}
-          >
-            <i className="fas fa-bug"></i>
-            Pest Detection
+            AgroAI Dashboard
           </Link>
         </div>
 
