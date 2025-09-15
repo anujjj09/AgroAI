@@ -13,9 +13,22 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background: linear-gradient(135deg, #E8F5E8 0%, #C8E6C9 100%);
   min-height: 100vh;
+  padding: 0;
+  margin: 0;
 }
 
 .container {
+  max-width: 1400px;
+  width: 98%;
+  margin: 10px auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  overflow: hidden;
+}
+
+/* Auth container for login/signup - smaller width */
+.auth-container {
   max-width: 400px;
   margin: 50px auto;
   background: white;
@@ -96,11 +109,15 @@ body {
 .dashboard-layout {
   min-height: 100vh;
   background: #f5f7fa;
+  width: 100%;
 }
 
 .main-content {
-  padding: 20px;
-  min-height: calc(100vh - 70px);
+  padding: 15px;
+  min-height: calc(100vh - 60px);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 /* Dashboard Cards */
@@ -193,8 +210,24 @@ body {
 }
 
 /* Responsive Design */
+@media (min-width: 1200px) {
+  .container {
+    max-width: 1400px;
+  }
+  
+  .main-content {
+    max-width: 1600px;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
+    margin: 20px;
+    max-width: none;
+    width: 95%;
+  }
+
+  .auth-container {
     margin: 20px;
     max-width: none;
   }
@@ -233,5 +266,9 @@ body {
 
   .dashboard-card {
     padding: 20px;
+  }
+
+  .auth-container {
+    margin: 10px;
   }
 }

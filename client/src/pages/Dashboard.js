@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import Navbar from '../components/Navbar';
 import WeatherTab from './WeatherTab';
 import MarketTab from './MarketTab';
 import ChatTab from './ChatTab';
@@ -10,7 +9,6 @@ const Dashboard = ({ user, token, onLogout }) => {
 
   return (
     <div className="container">
-      <Navbar user={user} onLogout={onLogout} />
       
       <div className="card" style={{ background: 'linear-gradient(135deg, #E8F5E8 0%, #F1F8E9 100%)', border: '2px solid #81C784', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

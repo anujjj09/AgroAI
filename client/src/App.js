@@ -3,10 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
-import WeatherTab from './pages/WeatherTab';
-import MarketTab from './pages/MarketTab';
-import ChatTab from './pages/ChatTab';
-import PestTab from './pages/PestTab';
+
 import Navbar from './components/Navbar';
 
 function App() {
@@ -64,46 +61,7 @@ function App() {
                   )
                 } 
               />
-              <Route 
-                path="/weather" 
-                element={
-                  user && token ? (
-                    <WeatherTab user={user} />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
-              <Route 
-                path="/market" 
-                element={
-                  user && token ? (
-                    <MarketTab user={user} />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
-              <Route 
-                path="/chat" 
-                element={
-                  user && token ? (
-                    <ChatTab user={user} />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
-              <Route 
-                path="/pest" 
-                element={
-                  user && token ? (
-                    <PestTab user={user} />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
+
             </Routes>
           </div>
         </div>

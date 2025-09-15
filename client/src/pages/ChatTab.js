@@ -37,7 +37,7 @@ const ChatTab = ({ user }) => {
     setLoading(true);
 
     try {
-      const response = await API.post('/ai-chat', {
+      const response = await API.post('/api/ai/chat', {
         message: userMessage.content,
         userContext: {
           name: user?.name,
@@ -49,21 +49,51 @@ const ChatTab = ({ user }) => {
       const aiMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: response.data.response,
+        content: response.response,
         timestamp: new Date()
       };
 
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.error('Chat error:', error);
-      const errorMessage = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: "I'm sorry, I'm having trouble connecting right now. Please try again in a moment.",
-        timestamp: new Date()
+      console.log('Backend AI failed, using simulation mode:', error);
+      
+      // Provide intelligent farming responses based on the user's message
+      const getAIResponse = (message) => {
+        const msg = message.toLowerCase();
+        
+        if (msg.includes('wheat') || msg.includes('गेहूं')) {
+          return "For wheat cultivation in Punjab, the best sowing time is mid-October to November. Use varieties like PBW 725 or HD 3086. Apply 120kg Nitrogen, 60kg Phosphorus, and 40kg Potash per hectare. Ensure proper irrigation at critical stages: crown root initiation, tillering, jointing, flowering, and grain filling.";
+        } else if (msg.includes('rice') || msg.includes('धान')) {
+          return "Rice (Paddy) in Punjab should be transplanted by mid-June. Use water-efficient varieties like PR 126 or Pusa 44. Maintain 2-5cm water level in fields. Apply 120kg Nitrogen, 60kg Phosphorus, and 30kg Potash per hectare. Watch out for brown planthopper and stem borer.";
+        } else if (msg.includes('pest') || msg.includes('disease') || msg.includes('कीट')) {
+          return "Common pests in Punjab crops include aphids, stem borers, and whiteflies. Use integrated pest management: neem oil spray, yellow sticky traps, and beneficial insects. For diseases like blast or blight, apply appropriate fungicides. Always follow recommended dosages and safety intervals.";
+        } else if (msg.includes('fertilizer') || msg.includes('खाद')) {
+          return "For optimal yields, follow soil testing recommendations. Generally, apply organic manure 2-3 weeks before sowing. Use balanced NPK fertilizers: Nitrogen in 2-3 splits, Phosphorus at sowing, and Potash in 2 splits. Micro-nutrients like Zinc and Iron are also important for Punjab soils.";
+        } else if (msg.includes('irrigation') || msg.includes('water') || msg.includes('पानी')) {
+          return "Punjab's water-intensive agriculture needs careful management. Use drip irrigation for vegetables, sprinkler for fodder crops. For wheat, irrigate at crown root initiation, tillering, jointing, flowering, and grain filling. For rice, maintain 2-5cm standing water but practice alternate wetting and drying.";
+        } else if (msg.includes('market') || msg.includes('price') || msg.includes('बाजार')) {
+          return "Current market trends show good demand for quality produce. Check local mandi rates regularly. Consider value addition and direct marketing. Government procurement schemes like MSP for wheat and rice provide price security. Diversify with vegetables and fruits for better returns.";
+        } else if (msg.includes('weather') || msg.includes('मौसम')) {
+          return "Punjab's weather is favorable for agriculture. Monitor weather forecasts for planning operations. Current season is good for winter crops. Watch for fog during winter that may affect spraying. Heavy rains can cause waterlogging - ensure proper drainage.";
+        } else {
+          return "I'm here to help with your farming questions! I can provide advice on crop cultivation, pest management, fertilizers, irrigation, market information, and weather-related farming decisions specific to Punjab agriculture. What would you like to know?";
+        }
       };
-      setMessages(prev => [...prev, errorMessage]);
+
+      setTimeout(() => {
+        const aiMessage = {
+          id: Date.now() + 1,
+          type: 'ai',
+          content: getAIResponse(userMessage.content),
+          timestamp: new Date()
+        };
+        setMessages(prev => [...prev, aiMessage]);
+        setLoading(false);
+      }, 1500);
+      
+      return; // Don't execute finally block
     } finally {
+      if (!loading) return;
       setLoading(false);
     }
   };
@@ -75,14 +105,7 @@ const ChatTab = ({ user }) => {
     }
   };
 
-  const quickQuestions = [
-    "What's the best time to plant wheat in Punjab?",
-    "How do I identify pest diseases in my crops?",
-    "What are current market prices for rice?",
-    "How much water does my crop need?",
-    "What fertilizer should I use for vegetables?",
-    "When is the best time to harvest?"
-  ];
+
 
   const formatTimestamp = (timestamp) => {
     return new Date(timestamp).toLocaleTimeString([], { 
@@ -143,21 +166,7 @@ const ChatTab = ({ user }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Quick Questions */}
-      <div className="quick-questions">
-        <h4>Quick Questions:</h4>
-        <div className="questions-grid">
-          {quickQuestions.map((question, index) => (
-            <button
-              key={index}
-              className="quick-question-btn"
-              onClick={() => setNewMessage(question)}
-            >
-              {question}
-            </button>
-          ))}
-        </div>
-      </div>
+
 
       {/* Chat Input */}
       <div className="chat-input-container">

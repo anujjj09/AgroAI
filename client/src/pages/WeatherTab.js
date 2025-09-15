@@ -13,26 +13,27 @@ const WeatherTab = ({ user }) => {
       // For demo purposes, using mock data since we don't have weather API integration
       // In production, this would call your backend weather endpoint
       setTimeout(() => {
+        // Realistic Punjab weather for September (current season)
         setWeatherData({
           location: user?.district || 'Punjab',
           current: {
-            temperature: 28,
+            temperature: 31,
             condition: 'Partly Cloudy',
-            humidity: 65,
-            windSpeed: 12,
+            humidity: 72,
+            windSpeed: 8,
             icon: 'fas fa-cloud-sun'
           },
           forecast: [
-            { day: 'Today', high: 32, low: 22, condition: 'Sunny', icon: 'fas fa-sun' },
-            { day: 'Tomorrow', high: 29, low: 20, condition: 'Cloudy', icon: 'fas fa-cloud' },
-            { day: 'Day 3', high: 26, low: 18, condition: 'Rain', icon: 'fas fa-cloud-rain' },
-            { day: 'Day 4', high: 31, low: 23, condition: 'Sunny', icon: 'fas fa-sun' },
-            { day: 'Day 5', high: 28, low: 19, condition: 'Partly Cloudy', icon: 'fas fa-cloud-sun' }
+            { day: 'Today', high: 33, low: 24, condition: 'Sunny', icon: 'fas fa-sun' },
+            { day: 'Tomorrow', high: 32, low: 23, condition: 'Partly Cloudy', icon: 'fas fa-cloud-sun' },
+            { day: 'Wed', high: 29, low: 21, condition: 'Light Rain', icon: 'fas fa-cloud-rain' },
+            { day: 'Thu', high: 31, low: 22, condition: 'Sunny', icon: 'fas fa-sun' },
+            { day: 'Fri', high: 30, low: 23, condition: 'Cloudy', icon: 'fas fa-cloud' }
           ],
           agriculture: {
-            soilMoisture: 'Moderate',
-            recommendation: 'Good conditions for wheat cultivation. Consider irrigation for vegetable crops.',
-            alerts: ['Light rain expected in 2 days', 'Temperature ideal for winter crops']
+            soilMoisture: 'Good',
+            recommendation: 'Excellent conditions for rice harvesting. Prepare for wheat sowing season. Monitor for pest activity due to humidity.',
+            alerts: ['Monsoon ending - prepare for post-monsoon crops', 'Ideal time for wheat field preparation', 'High humidity may increase pest activity']
           }
         });
         setLoading(false);

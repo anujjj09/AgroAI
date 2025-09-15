@@ -25,17 +25,31 @@ const AuthPage = ({ onLogin }) => {
   };
 
   return (
-    <div className="container">
-      <div className="auth-header" style={{ textAlign: 'center', color: 'white', marginBottom: '30px' }}>
-        <h1 style={{ fontSize: '3.5rem', marginBottom: '15px', textShadow: '3px 3px 6px rgba(0,0,0,0.4)' }}>
-          <i className="fas fa-seedling"></i> AgroAI
+    <div className="auth-container">
+      <div className="auth-header" style={{ textAlign: 'center', marginBottom: '30px' }}>
+        <h1 style={{ 
+          fontSize: '3.5rem', 
+          marginBottom: '15px', 
+          background: 'linear-gradient(45deg, #2E7D32, #4CAF50, #66BB6A)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+          fontWeight: '700',
+          textShadow: '2px 2px 4px rgba(46, 125, 50, 0.3)' 
+        }}>
+          <i className="fas fa-seedling" style={{ color: '#4CAF50' }}></i> AgroAI
         </h1>
-        <p style={{ fontSize: '1.3rem', opacity: '0.95', textShadow: '1px 1px 3px rgba(0,0,0,0.3)' }}>
+        <p style={{ 
+          fontSize: '1.3rem', 
+          color: '#E8F5E8',
+          textShadow: '1px 1px 3px rgba(0,0,0,0.3)',
+          fontWeight: '500'
+        }}>
           🌱 Intelligent Farming Solutions for Modern Agriculture 🚜
         </p>
       </div>
 
-      <div className="card">
+      <div className="auth-card">
         {currentStep === 'phone' && (
           <PhoneStep onSuccess={handlePhoneSuccess} />
         )}

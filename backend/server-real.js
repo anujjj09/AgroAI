@@ -11,18 +11,24 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Initialize Sequelize with PostgreSQL
-const { Sequelize } = require("sequelize");
 
-const sequelize = new Sequelize(process.env.DATABASE_URL, {
-  dialect: "postgres",
-  protocol: "postgres",
-  dialectOptions: {
-    ssl: {
-      require: true,
-      rejectUnauthorized: false
-    }
+const sequelize = new Sequelize(
+  process.env.DB_NAME || 'agroai',
+  process.env.DB_USER || 'postgres', 
+  process.env.DB_PASSWORD || 'Admin',
+  {
+    host: process.env.DB_HOST || 'localhost',
+    port: process.env.DB_PORT || 5432,
+    dialect: 'postgres',
+    logging: false, // Set to console.log to see SQL queries
+    dialectOptions: process.env.NODE_ENV === 'production' ? {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    } : {}
   }
-});
+);
 
 
 
@@ -108,7 +114,7 @@ const OTP = sequelize.define('OTP', {
 
 // Middleware
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://127.0.0.1:5500', 'file://'],
+  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:5500', 'file://'],
   credentials: true
 }));
 app.use(express.json());

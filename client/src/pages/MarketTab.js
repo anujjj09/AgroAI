@@ -14,24 +14,27 @@ const MarketTab = ({ user }) => {
     
     // Mock market data - in production this would come from your backend API
     setTimeout(() => {
+      // Updated realistic Punjab market prices (September 2025)
       const mockData = {
         grains: [
-          { name: 'Wheat', price: 2150, unit: 'per quintal', change: '+2.5%', trend: 'up', icon: '🌾' },
-          { name: 'Rice (Basmati)', price: 4800, unit: 'per quintal', change: '+1.8%', trend: 'up', icon: '🍚' },
-          { name: 'Maize', price: 1850, unit: 'per quintal', change: '-1.2%', trend: 'down', icon: '🌽' },
-          { name: 'Barley', price: 1650, unit: 'per quintal', change: '+0.8%', trend: 'up', icon: '🌾' }
+          { name: 'Wheat', price: 2275, unit: 'per quintal', change: '+3.2%', trend: 'up', icon: '🌾' },
+          { name: 'Rice (Basmati)', price: 5200, unit: 'per quintal', change: '+4.5%', trend: 'up', icon: '🍚' },
+          { name: 'Rice (Non-Basmati)', price: 3150, unit: 'per quintal', change: '+2.1%', trend: 'up', icon: '🍚' },
+          { name: 'Maize', price: 1950, unit: 'per quintal', change: '+1.8%', trend: 'up', icon: '🌽' },
+          { name: 'Mustard', price: 5800, unit: 'per quintal', change: '+2.7%', trend: 'up', icon: '�' }
         ],
         vegetables: [
-          { name: 'Onion', price: 3200, unit: 'per quintal', change: '+15.2%', trend: 'up', icon: '🧅' },
-          { name: 'Potato', price: 1800, unit: 'per quintal', change: '-5.3%', trend: 'down', icon: '🥔' },
-          { name: 'Tomato', price: 4500, unit: 'per quintal', change: '+8.7%', trend: 'up', icon: '🍅' },
-          { name: 'Cabbage', price: 1200, unit: 'per quintal', change: '+3.2%', trend: 'up', icon: '🥬' }
+          { name: 'Onion', price: 2800, unit: 'per quintal', change: '+12.5%', trend: 'up', icon: '🧅' },
+          { name: 'Potato', price: 1650, unit: 'per quintal', change: '-3.2%', trend: 'down', icon: '🥔' },
+          { name: 'Tomato', price: 3200, unit: 'per quintal', change: '+6.8%', trend: 'up', icon: '🍅' },
+          { name: 'Cauliflower', price: 1800, unit: 'per quintal', change: '+4.1%', trend: 'up', icon: '🥬' },
+          { name: 'Green Peas', price: 4500, unit: 'per quintal', change: '+8.2%', trend: 'up', icon: '🟢' }
         ],
         fruits: [
-          { name: 'Apple', price: 8000, unit: 'per quintal', change: '+2.1%', trend: 'up', icon: '🍎' },
-          { name: 'Orange', price: 4500, unit: 'per quintal', change: '-0.8%', trend: 'down', icon: '🍊' },
-          { name: 'Banana', price: 3500, unit: 'per quintal', change: '+4.5%', trend: 'up', icon: '🍌' },
-          { name: 'Grapes', price: 6500, unit: 'per quintal', change: '+1.9%', trend: 'up', icon: '🍇' }
+          { name: 'Kinnow', price: 2500, unit: 'per quintal', change: '+3.5%', trend: 'up', icon: '�' },
+          { name: 'Guava', price: 3200, unit: 'per quintal', change: '+2.1%', trend: 'up', icon: '🥭' },
+          { name: 'Pomegranate', price: 7500, unit: 'per quintal', change: '+1.8%', trend: 'up', icon: '🟥' },
+          { name: 'Grapes', price: 6200, unit: 'per quintal', change: '-1.2%', trend: 'down', icon: '🍇' }
         ]
       };
       
@@ -105,16 +108,7 @@ const MarketTab = ({ user }) => {
                 </div>
               </div>
 
-              <div className="market-actions">
-                <button className="action-btn primary">
-                  <i className="fas fa-handshake"></i>
-                  Get Buyers
-                </button>
-                <button className="action-btn secondary">
-                  <i className="fas fa-chart-area"></i>
-                  View Trends
-                </button>
-              </div>
+
             </div>
           ))}
         </div>
@@ -129,8 +123,8 @@ const MarketTab = ({ user }) => {
         <div className="tips-grid">
           <div className="tip-card">
             <i className="fas fa-clock"></i>
-            <h4>Best Selling Time</h4>
-            <p>Morning hours (6-10 AM) typically offer better prices and more buyers.</p>
+            <h4>Best Market Time</h4>
+            <p>Morning hours (6-10 AM) typically offer better prices in agricultural markets.</p>
           </div>
           <div className="tip-card">
             <i className="fas fa-balance-scale"></i>
@@ -306,42 +300,7 @@ const MarketTab = ({ user }) => {
           font-weight: normal;
         }
 
-        .market-actions {
-          display: flex;
-          gap: 10px;
-        }
 
-        .action-btn {
-          flex: 1;
-          padding: 10px 15px;
-          border: none;
-          border-radius: 6px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          font-weight: 500;
-          transition: all 0.3s ease;
-        }
-
-        .action-btn.primary {
-          background: #4CAF50;
-          color: white;
-        }
-
-        .action-btn.primary:hover {
-          background: #45a049;
-        }
-
-        .action-btn.secondary {
-          background: #E0E0E0;
-          color: #666;
-        }
-
-        .action-btn.secondary:hover {
-          background: #D0D0D0;
-        }
 
         .market-tips {
           background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%);
@@ -405,10 +364,7 @@ const MarketTab = ({ user }) => {
             grid-template-columns: 1fr;
           }
 
-          .action-btn {
-            font-size: 0.9rem;
-            padding: 8px 12px;
-          }
+
 
           .tips-grid {
             grid-template-columns: 1fr;
