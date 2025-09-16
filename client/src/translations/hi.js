@@ -96,7 +96,6 @@ export const hi = {
         captureHint: "अपनी फसल के पत्ते, तने या प्रभावित क्षेत्रों को कैप्चर करें",
     detectionResult: "पहचान परिणाम",
     match: "मेल",
-    severity: "गंभीरता",
     keySymptoms: "मुख्य लक्षण",
     recommendedTreatment: "अनुशंसित उपचार",
     cropAffected: "प्रभावित फसल",
@@ -227,33 +226,5 @@ export const hi = {
     },
     moderate: "सामान्य",
     cold: "ठंडा"
-  },
-  
-  // Market
-  market: {
-    title: "बाजार दरें",
-    loading: "बाजार डेटा लोड हो रहा है...",
-    error: "बाजार डेटा लोड करने में विफल",
-    categories: {
-      grains: "अनाज और दाने",
-      vegetables: "सब्जियां",
-      fruits: "फल"
-    },
-    priceChange: "मूल्य परिवर्तन",
-    perQuintal: "प्रति क्विंटल",
-    marketTips: "बाजार सुझाव",
-    bestTime: "सबसे अच्छा बाजार समय",
-    timingDesc: "सुबह जल्दी (6-8 बजे) आमतौर पर बेहतर दाम मिलते हैं",
-    storage: "उचित भंडारण",
-    storageDesc: "मूल्य हानि से बचने के लिए फसल को साफ, सूखी जगह पर स्टोर करें"
-  },
-
-  // Chat
-  chat: {
-    title: "एआई कृषि सहायक",
-    subtitle: "व्यक्तिगत कृषि सलाह और जानकारी प्राप्त करें",
-    online: "ऑनलाइन",
-    placeholder: "कुछ भी पूछें - खेती, सामान्य ज्ञान, गणित, विज्ञान, या कोई भी सवाल...",
-    inputHint: "भेजने के लिए Enter दबाएं, नई लाइन के लिए Shift+Enter"
   }
 };

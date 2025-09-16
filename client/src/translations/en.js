@@ -96,7 +96,6 @@ export const en = {
     captureHint: "Capture your crop's leaves, stems, or affected areas",
     detectionResult: "Detection Result",
     match: "Match",
-    severity: "Severity",
     keySymptoms: "Key Symptoms",
     recommendedTreatment: "Recommended Treatment",
     cropAffected: "Crop Affected",
@@ -227,33 +226,5 @@ export const en = {
     },
     moderate: "Moderate",
     cold: "Cold"
-  },
-  
-  // Market
-  market: {
-    title: "Market Prices",
-    loading: "Loading market data...",
-    error: "Failed to load market data",
-    categories: {
-      grains: "Grains & Cereals",
-      vegetables: "Vegetables", 
-      fruits: "Fruits"
-    },
-    priceChange: "Price Change",
-    perQuintal: "per quintal",
-    marketTips: "Market Tips",
-    bestTime: "Best Market Time",
-    timingDesc: "Early morning (6-8 AM) usually offers better prices",
-    storage: "Proper Storage", 
-    storageDesc: "Store crops in clean, dry conditions to avoid price loss"
-  },
-
-  // Chat
-  chat: {
-    title: "AI Agricultural Assistant",
-    subtitle: "Get personalized farming advice and insights",
-    online: "Online",
-    placeholder: "Ask me anything - farming, general knowledge, math, science, or any question...",
-    inputHint: "Press Enter to send, Shift+Enter for new line"
   }
 };
