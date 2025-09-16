@@ -5,32 +5,52 @@ const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const twilio = require('twilio');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const multer = require('multer');
+const fs = require('fs');
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Initialize Sequelize with PostgreSQL
+// Initialize Sequelize with PostgreSQL or SQLite for development
 
-const sequelize = new Sequelize(
-  process.env.DB_NAME || 'agroai',
-  process.env.DB_USER || 'postgres', 
-  process.env.DB_PASSWORD || 'Admin',
-  {
-    host: process.env.DB_HOST || 'localhost',
-    port: process.env.DB_PORT || 5432,
+const sequelize = process.env.DATABASE_URL ? 
+  new Sequelize(process.env.DATABASE_URL, {
     dialect: 'postgres',
-    logging: false, // Set to console.log to see SQL queries
-    dialectOptions: process.env.NODE_ENV === 'production' ? {
+    logging: false,
+    dialectOptions: {
       ssl: {
         require: true,
         rejectUnauthorized: false
       }
-    } : {}
+    }
+  }) :
+  new Sequelize({
+    dialect: 'sqlite',
+    storage: './database.sqlite',
+    logging: false
+  });
+
+// Initialize Google Gemini AI
+let genAI = null;
+let geminiModel = null;
+let geminiVisionModel = null;
+
+if (process.env.GEMINI_API_KEY) {
+  try {
+    genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    geminiModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    geminiVisionModel = genAI.getGenerativeModel({ model: "gemini-1.5-flash" }); // 1.5 Flash supports both text and vision
+    console.log('✅ Google Gemini AI initialized (Text + Vision)');
+  } catch (error) {
+    console.log('⚠️  Gemini initialization failed:', error.message);
+    console.log('🤖 Using AI simulation mode');
   }
-);
-
-
+} else {
+  console.log('⚠️  Gemini API key not configured - using simulation mode');
+  console.log('📝 To enable real AI: Set GEMINI_API_KEY in .env file');
+}
 
 // Initialize Twilio
 let twilioClient = null;
@@ -120,21 +140,50 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Configure multer for image uploads
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB limit
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
 // Serve static files
 app.use(express.static(path.join(__dirname, '../')));
 
-// Authentication middleware
+// Authentication middleware - flexible for testing
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
   const token = authHeader && authHeader.split(' ')[1];
 
+  // Allow guest access for testing - create a default user context
   if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
+    req.user = { 
+      userId: 'guest', 
+      guest: true,
+      district: 'Punjab',
+      language: 'en'
+    };
+    return next();
   }
 
   jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret', (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Invalid token' });
+      // On token error, still allow guest access
+      req.user = { 
+        userId: 'guest', 
+        guest: true,
+        district: 'Punjab',
+        language: 'en'
+      };
+      return next();
     }
     req.user = user;
     next();
@@ -187,6 +236,24 @@ app.get('/api/health', async (req, res) => {
       status: 'ERROR',
       message: 'Database connection failed',
       error: error.message
+    });
+  }
+});
+
+// Test endpoint for debugging
+app.post('/api/test-chat', async (req, res) => {
+  try {
+    const { message } = req.body;
+    res.status(200).json({
+      success: true,
+      response: `Test response for: ${message}`,
+      timestamp: new Date().toISOString(),
+      geminiAI: geminiModel ? 'Available' : 'Not Available'
+    });
+  } catch (error) {
+    res.status(500).json({
+      error: 'Test endpoint error',
+      message: error.message
     });
   }
 });
@@ -401,6 +468,41 @@ app.put('/api/user/profile', authenticateToken, async (req, res) => {
   }
 });
 
+// Language preference update endpoint
+app.post('/api/user/language', authenticateToken, async (req, res) => {
+  try {
+    const { language } = req.body;
+    
+    if (!['en', 'hi', 'pa'].includes(language)) {
+      return res.status(400).json({
+        error: 'Invalid language',
+        message: 'Supported languages: en, hi, pa'
+      });
+    }
+
+    // For authenticated users, update database
+    if (req.user && !req.user.guest) {
+      const user = await User.findByPk(req.user.userId);
+      if (user) {
+        await user.update({ preferred_language: language });
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: 'Language preference updated',
+      language: language
+    });
+
+  } catch (error) {
+    console.error('Update Language Error:', error);
+    res.status(500).json({
+      error: 'Language update failed',
+      message: error.message
+    });
+  }
+});
+
 // Weather API (using external API)
 app.get('/api/weather/:district', async (req, res) => {
   try {
@@ -458,7 +560,7 @@ app.get('/api/market/:district', async (req, res) => {
 // AI Chat - Intelligent Agricultural Assistant
 app.post('/api/ai/chat', authenticateToken, async (req, res) => {
   try {
-    const { message } = req.body;
+    const { message, userContext } = req.body;
     
     if (!message || message.trim().length === 0) {
       return res.status(400).json({
@@ -467,22 +569,80 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
       });
     }
     
-    // Get user context
-    const user = await User.findByPk(req.user.userId);
-    const userMessage = message.toLowerCase().trim();
-    const district = user.district || 'Punjab';
-    const language = user.preferred_language || 'en';
+    // Get user context from authenticated user or request
+    let district = 'Punjab';
+    let language = 'en';
     
-    // Intelligent response system based on user input
-    let response = generateIntelligentResponse(userMessage, district, language);
+    if (req.user && !req.user.guest) {
+      const user = await User.findByPk(req.user.userId);
+      district = user?.district || userContext?.district || 'Punjab';
+      language = user?.preferred_language || userContext?.language || 'en';
+    } else {
+      // Guest user or no authentication - use request context
+      district = userContext?.district || req.user?.district || 'Punjab';
+      language = userContext?.language || req.user?.language || 'en';
+    }
+    
+    let response;
+    
+    // Try to use Gemini AI first
+    console.log('🔍 Checking Gemini model availability:', !!geminiModel);
+    console.log('🔍 User message:', message);
+    console.log('🔍 Language:', language);
+    if (geminiModel) {
+      try {
+        let prompt;
+        
+        if (language === 'hi') {
+          prompt = `आप एक सहायक AI असिस्टेंट हैं। उपयोगकर्ता ${district} जिले से है।
+
+उपयोगकर्ता का प्रश्न: ${message}
+
+कृपया हिंदी में सहायक और सटीक जवाब दें:`;
+        } else if (language === 'pa') {
+          prompt = `ਤੁਸੀਂ ਇੱਕ ਸਹਾਇਕ AI ਅਸਿਸਟੈਂਟ ਹੋ। ਉਪਭੋਗਤਾ ${district} ਜ਼ਿਲ੍ਹੇ ਦਾ ਹੈ।
+
+ਉਪਭੋਗਤਾ ਦਾ ਸਵਾਲ: ${message}
+
+ਕਿਰਪਾ ਕਰਕੇ ਪੰਜਾਬੀ ਵਿੱਚ ਸਹਾਇਕ ਅਤੇ ਸਹੀ ਜਵਾਬ ਦਿਓ:`;
+        } else {
+          prompt = `You are a helpful AI assistant. The user is from ${district} district.
+
+User question: ${message}
+
+Please provide a helpful and accurate response:`;
+        }
+
+        console.log('🤖 Calling Gemini API with prompt length:', prompt.length);
+        const result = await geminiModel.generateContent(prompt);
+        const aiResponse = result.response;
+        response = aiResponse.text();
+        
+        console.log('✅ Gemini API success! Response length:', response.length);
+        console.log('✅ First 200 chars:', response.substring(0, 200));
+        
+        // Clean up the response
+        response = response.replace(/\*\*/g, '').trim();
+        
+      } catch (geminiError) {
+        console.error('❌ Gemini API failed:', geminiError.message);
+        console.error('❌ Error details:', geminiError);
+        console.log('🔄 Falling back to intelligent response system');
+        response = `I'm having trouble connecting to my AI service right now. Let me help you with a general response: ${generateIntelligentResponse(message.toLowerCase().trim(), district, language)}`;
+      }
+    } else {
+      // Use fallback response system
+      response = generateIntelligentResponse(message.toLowerCase().trim(), district, language);
+    }
     
     res.status(200).json({
       success: true,
       response: response,
       timestamp: new Date().toISOString(),
       context: {
-        district: user.district,
-        language: user.preferred_language
+        district: district,
+        language: language,
+        aiSource: geminiModel ? 'gemini' : 'fallback'
       }
     });
   } catch (error) {
@@ -495,31 +655,56 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
 
 // Intelligent response generation function
 function generateIntelligentResponse(userMessage, district, language) {
-  // Convert message to lowercase for better matching
   const msg = userMessage.toLowerCase();
   
-  // Weather-related queries
-  if (msg.includes('weather') || msg.includes('rain') || msg.includes('temperature') || msg.includes('climate')) {
-    const weatherResponses = [
-      `Based on current weather patterns in ${district}, I recommend monitoring soil moisture levels and adjusting irrigation accordingly.`,
-      `The weather in ${district} affects crop growth significantly. Make sure to protect your crops from unexpected weather changes.`,
-      `Weather conditions in ${district} are crucial for farming decisions. Check weather forecasts before planning field activities.`,
-      `Current weather patterns suggest optimal conditions for certain crops in ${district}. Consider seasonal variations in your planning.`
-    ];
-    return weatherResponses[Math.floor(Math.random() * weatherResponses.length)];
+  // Weather-related responses in different languages
+  if (msg.includes('weather') || msg.includes('rain') || msg.includes('मौसम') || msg.includes('बारिश') || msg.includes('ਮੌਸਮ') || msg.includes('ਬਰਸਾਤ')) {
+    if (language === 'hi') {
+      return `${district} में वर्तमान मौसम पैटर्न के आधार पर, मैं मिट्टी की नमी के स्तर की निगरानी करने और तदनुसार सिंचाई को समायोजित करने की सिफारिश करता हूं। मौसम पूर्वानुमान की जांच करें।`;
+    } else if (language === 'pa') {
+      return `${district} ਵਿੱਚ ਮੌਜੂਦਾ ਮੌਸਮ ਪੈਟਰਨ ਦੇ ਆਧਾਰ 'ਤੇ, ਮੈਂ ਮਿੱਟੀ ਦੀ ਨਮੀ ਦੇ ਪੱਧਰ ਦੀ ਨਿਗਰਾਨੀ ਕਰਨ ਅਤੇ ਸਿੰਚਾਈ ਨੂੰ ਉਸ ਅਨੁਸਾਰ ਵਿਵਸਥਿਤ ਕਰਨ ਦੀ ਸਿਫਾਰਸ਼ ਕਰਦਾ ਹਾਂ। ਮੌਸਮ ਪੂਰਵਾਨੁਮਾਨ ਦੀ ਜਾਂਚ ਕਰੋ।`;
+    }
+    return `Based on current weather patterns in ${district}, I recommend monitoring soil moisture levels and adjusting irrigation accordingly. Check weather forecasts before planning field activities.`;
   }
   
-  // Crop-specific queries
-  if (msg.includes('wheat') || msg.includes('gehu')) {
-    return `For wheat cultivation in ${district}: Plant in November-December, ensure proper seed treatment, apply balanced fertilizers (120kg N, 60kg P2O5, 40kg K2O per hectare), and maintain adequate moisture during grain filling stage. Harvest typically occurs in April-May.`;
+  // Wheat cultivation
+  if (msg.includes('wheat') || msg.includes('गेहूं') || msg.includes('ਕਣਕ')) {
+    if (language === 'hi') {
+      return `${district} में गेहूं की खेती के लिए: नवंबर-दिसंबर में बुवाई करें, उचित बीज उपचार सुनिश्चित करें, संतुलित उर्वरक (120kg N, 60kg P2O5, 40kg K2O प्रति हेक्टेयर) लगाएं। अप्रैल-मई में कटाई करें।`;
+    } else if (language === 'pa') {
+      return `${district} ਵਿੱਚ ਕਣਕ ਦੀ ਖੇਤੀ ਲਈ: ਨਵੰਬਰ-ਦਸੰਬਰ ਵਿੱਚ ਬੀਜਾਈ ਕਰੋ, ਸਹੀ ਬੀਜ ਇਲਾਜ ਯਕੀਨੀ ਬਣਾਓ, ਸੰਤੁਲਿਤ ਖਾਦ (120kg N, 60kg P2O5, 40kg K2O ਪ੍ਰਤੀ ਹੈਕਟੇਅਰ) ਪਾਓ। ਅਪ੍ਰੈਲ-ਮਈ ਵਿੱਚ ਕਟਾਈ ਕਰੋ।`;
+    }
+    return `For wheat cultivation in ${district}: Plant in November-December, ensure proper seed treatment, apply balanced fertilizers (120kg N, 60kg P2O5, 40kg K2O per hectare), and maintain adequate moisture. Harvest in April-May.`;
   }
   
-  if (msg.includes('rice') || msg.includes('dhan') || msg.includes('paddy')) {
-    return `Rice farming in ${district}: Transplant nursery seedlings in June-July, maintain 2-5cm water level, apply nitrogen in 3 splits, watch for brown plant hopper and stem borer. Expected harvest in October-November.`;
+  // Rice cultivation  
+  if (msg.includes('rice') || msg.includes('paddy') || msg.includes('धान') || msg.includes('चावल') || msg.includes('ਧਾਨ') || msg.includes('ਚਾਵਲ')) {
+    if (language === 'hi') {
+      return `${district} में धान की खेती: जून में रोपाई करें, पानी की उचित व्यवस्था बनाए रखें (2-5 सेमी), संतुलित उर्वरक का उपयोग करें। भूरे फुदके और तना छेदक से सावधान रहें।`;
+    } else if (language === 'pa') {
+      return `${district} ਵਿੱਚ ਧਾਨ ਦੀ ਖੇਤੀ: ਜੂਨ ਵਿੱਚ ਰੋਪਾਈ ਕਰੋ, ਪਾਣੀ ਦੀ ਸਹੀ ਵਿਵਸਥਾ (2-5 ਸੈਮੀ) ਰੱਖੋ, ਸੰਤੁਲਿਤ ਖਾਦ ਦਾ ਇਸਤੇਮਾਲ ਕਰੋ। ਭੂਰੇ ਫੁਦਕੇ ਅਤੇ ਤਣਾ ਛੇਦਕ ਤੋਂ ਸਾਵਧਾਨ ਰਹੋ।`;
+    }
+    return `For rice cultivation in ${district}: Transplant in June, maintain proper water level (2-5cm), use balanced fertilizers. Watch out for brown planthopper and stem borer.`;
   }
   
-  if (msg.includes('cotton') || msg.includes('kapas')) {
+  // Cotton cultivation  
+  if (msg.includes('cotton') || msg.includes('कपास') || msg.includes('ਕਪਾਹ')) {
+    if (language === 'hi') {
+      return `${district} में कपास की खेती: अप्रैल-मई में बुवाई करें, 67.5cm x 23cm की दूरी बनाए रखें, बुवाई के समय पर्याप्त फॉस्फोरस डालें। सूंडी और सफेद मक्खी की निगरानी करें।`;
+    } else if (language === 'pa') {
+      return `${district} ਵਿੱਚ ਕਪਾਹ ਦੀ ਖੇਤੀ: ਅਪ੍ਰੈਲ-ਮਈ ਵਿੱਚ ਬੀਜਾਈ ਕਰੋ, 67.5cm x 23cm ਦੀ ਦੂਰੀ ਰੱਖੋ, ਬੀਜਾਈ ਸਮੇਂ ਲੋੜੀਂਦਾ ਫਾਸਫੋਰਸ ਪਾਓ। ਸੁੰਡੀ ਅਤੇ ਚਿੱਟੇ ਮੱਖੀ ਦੀ ਨਿਗਰਾਨੀ ਕਰੋ।`;
+    }
     return `Cotton cultivation in ${district}: Sow in April-May, maintain plant spacing of 67.5cm x 23cm, apply adequate phosphorus at planting, monitor for bollworm and whitefly. Pick cotton when bolls are fully opened.`;
+  }
+  
+  // Pest and disease responses with multilingual support
+  if (msg.includes('pest') || msg.includes('कीट') || msg.includes('ਕੀੜੇ') || msg.includes('disease') || msg.includes('बीमारी') || msg.includes('ਬਿਮਾਰੀ')) {
+    if (language === 'hi') {
+      return `${district} में कीट प्रबंधन के लिए एकीकृत कीट प्रबंधन (IPM) का उपयोग करें - जैविक नियंत्रण, प्रतिरोधी किस्मों, और कीटनाशकों का सुविचारित उपयोग। नीम आधारित उत्पादों का उपयोग करें।`;
+    } else if (language === 'pa') {
+      return `${district} ਵਿੱਚ ਕੀੜੇ ਪ੍ਰਬੰਧਨ ਲਈ ਏਕੀਕ੍ਰਿਤ ਕੀੜੇ ਪ੍ਰਬੰਧਨ (IPM) ਦੀ ਵਰਤੋਂ ਕਰੋ - ਜੀਵ ਵਿਗਿਆਨਕ ਨਿਯੰਤਰਣ, ਪ੍ਰਤੀਰੋਧੀ ਕਿਸਮਾਂ, ਅਤੇ ਕੀੜੇ-ਮਾਰ ਦਵਾਈਆਂ ਦੀ ਸੋਚੀ-ਸਮਝੀ ਵਰਤੋਂ। ਨਿੰਮ ਅਧਾਰਤ ਉਤਪਾਦਾਂ ਦੀ ਵਰਤੋਂ ਕਰੋ।`;
+    }
+    return `For pest management in ${district}, use Integrated Pest Management (IPM) - combine biological controls, resistant varieties, and judicious use of pesticides. Use neem-based products for organic control.`;
   }
   
   if (msg.includes('maize') || msg.includes('corn') || msg.includes('makka')) {
@@ -638,206 +823,205 @@ function generateIntelligentResponse(userMessage, district, language) {
     return `I can assist you with: 🌾 Crop cultivation advice 🐛 Pest & disease management 💧 Irrigation guidance 🧪 Fertilizer recommendations 📈 Market information 🚜 Farm machinery advice 💰 Financial schemes. Ask me anything about farming in ${district}!`;
   }
   
-  // Default response for unrecognized queries
-  const defaultResponses = [
-    `I understand you're asking about "${userMessage}". For specific agricultural guidance in ${district}, I recommend consulting with your local agricultural extension officer or visiting the nearest Krishi Vigyan Kendra.`,
-    `That's an interesting question about "${userMessage}". While I can provide general farming advice for ${district}, for detailed technical guidance, please contact agricultural experts in your area.`,
-    `Thanks for your question about "${userMessage}". For the most accurate advice for your specific situation in ${district}, I suggest speaking with local farming experts or agricultural scientists.`,
-    `I'd be happy to help with your farming questions in ${district}. Could you be more specific about crops, pests, irrigation, fertilizers, or other farming aspects you'd like to know about?`
-  ];
-  
-  return defaultResponses[Math.floor(Math.random() * defaultResponses.length)];
+  // Default multilingual response for unrecognized queries
+  if (language === 'hi') {
+    const hindiResponses = [
+      `मैं समझ गया हूं कि आप "${userMessage}" के बारे में पूछ रहे हैं। ${district} में विशिष्ट कृषि मार्गदर्शन के लिए, मैं आपके स्थानीय कृषि विस्तार अधिकारी से सलाह लेने या निकटतम कृषि विज्ञान केंद्र जाने की सिफारिश करता हूं।`,
+      `"${userMessage}" के बारे में यह एक दिलचस्प प्रश्न है। जबकि मैं ${district} के लिए सामान्य कृषि सलाह प्रदान कर सकता हूं, विस्तृत तकनीकी मार्गदर्शन के लिए कृपया अपने क्षेत्र के कृषि विशेषज्ञों से संपर्क करें।`,
+      `"${userMessage}" के बारे में आपके प्रश्न के लिए धन्यवाद। ${district} में आपकी विशिष्ट स्थिति के लिए सबसे सटीक सलाह के लिए, मैं स्थानीय कृषि विशेषज्ञों या कृषि वैज्ञानिकों से बात करने का सुझाव देता हूं।`
+    ];
+    return hindiResponses[Math.floor(Math.random() * hindiResponses.length)];
+  } else if (language === 'pa') {
+    const punjabiResponses = [
+      `ਮੈਂ ਸਮਝ ਗਿਆ ਹਾਂ ਕਿ ਤੁਸੀਂ "${userMessage}" ਬਾਰੇ ਪੁੱਛ ਰਹੇ ਹੋ। ${district} ਵਿੱਚ ਵਿਸ਼ੇਸ਼ ਖੇਤੀ ਮਾਰਗਦਰਸ਼ਨ ਲਈ, ਮੈਂ ਤੁਹਾਡੇ ਸਥਾਨਕ ਖੇਤੀ ਵਿਸਥਾਰ ਅਧਿਕਾਰੀ ਨਾਲ ਸਲਾਹ ਕਰਨ ਜਾਂ ਨੇੜਲੇ ਕਿਰਸ਼ੀ ਵਿਗਿਆਨ ਕੇਂਦਰ ਜਾਣ ਦੀ ਸਿਫਾਰਸ਼ ਕਰਦਾ ਹਾਂ।`,
+      `"${userMessage}" ਬਾਰੇ ਇਹ ਇੱਕ ਦਿਲਚਸਪ ਸਵਾਲ ਹੈ। ਜਦੋਂ ਕਿ ਮੈਂ ${district} ਲਈ ਆਮ ਖੇਤੀ ਸਲਾਹ ਪ੍ਰਦਾਨ ਕਰ ਸਕਦਾ ਹਾਂ, ਵਿਸਤ੍ਰਿਤ ਤਕਨੀਕੀ ਮਾਰਗਦਰਸ਼ਨ ਲਈ ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੇ ਖੇਤਰ ਦੇ ਖੇਤੀ ਮਾਹਿਰਾਂ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।`,
+      `"${userMessage}" ਬਾਰੇ ਤੁਹਾਡੇ ਸਵਾਲ ਲਈ ਧੰਨਵਾਦ। ${district} ਵਿੱਚ ਤੁਹਾਡੀ ਵਿਸ਼ੇਸ਼ ਸਥਿਤੀ ਲਈ ਸਭ ਤੋਂ ਸਟੀਕ ਸਲਾਹ ਲਈ, ਮੈਂ ਸਥਾਨਕ ਖੇਤੀ ਮਾਹਿਰਾਂ ਜਾਂ ਖੇਤੀ ਵਿਗਿਆਨੀਆਂ ਨਾਲ ਗੱਲ ਕਰਨ ਦਾ ਸੁਝਾਅ ਦਿੰਦਾ ਹਾਂ।`
+    ];
+    return punjabiResponses[Math.floor(Math.random() * punjabiResponses.length)];
+  } else {
+    const englishResponses = [
+      `I understand you're asking about "${userMessage}". For specific agricultural guidance in ${district}, I recommend consulting with your local agricultural extension officer or visiting the nearest Krishi Vigyan Kendra.`,
+      `That's an interesting question about "${userMessage}". While I can provide general farming advice for ${district}, for detailed technical guidance, please contact agricultural experts in your area.`,
+      `Thanks for your question about "${userMessage}". For the most accurate advice for your specific situation in ${district}, I suggest speaking with local farming experts or agricultural scientists.`,
+      `I'd be happy to help with your farming questions in ${district}. Could you be more specific about crops, pests, irrigation, fertilizers, or other farming aspects you'd like to know about?`
+    ];
+    return englishResponses[Math.floor(Math.random() * englishResponses.length)];
+  }
 }
 
-// Pest Detection with Image Analysis
-app.post('/api/ai/pest-detection', authenticateToken, async (req, res) => {
+// Pest Detection with Image Analysis using Gemini Vision
+app.post('/api/detect-pest', upload.single('image'), authenticateToken, async (req, res) => {
   try {
-    // In a real implementation, you would:
-    // 1. Extract image data from req.body or req.files
-    // 2. Send to Google Vision API, OpenAI GPT-4V, or custom ML model
-    // 3. Analyze the image for pest characteristics
-    // 4. Return specific detection results
-    
-    // For now, we'll simulate different pest detections based on image analysis
-    // Comprehensive pest database with detailed information
-    const pestDatabase = {
-      'aphids': {
-        name: 'Green Peach Aphids',
-        confidence: Math.floor(Math.random() * 15 + 85) + '%',
-        severity: 'Medium',
-        scientificName: 'Myzus persicae',
-        description: 'Small, soft-bodied insects (1-3mm) that cluster on young shoots and leaf undersides. They pierce plant tissues and suck sap, weakening plants and potentially transmitting viral diseases.',
-        symptoms: [
-          'Clusters of small green insects on stems and leaves',
-          'Yellowing and curling of leaves, especially new growth',
-          'Sticky honeydew coating on leaves and nearby surfaces',
-          'Stunted plant growth and reduced vigor',
-          'Presence of ants farming the aphids',
-          'Sooty mold growth on honeydew deposits'
-        ],
-        identificationTips: 'Look for small, pear-shaped insects in colonies. They may be green, black, or reddish. Check undersides of leaves and growing tips.',
-        lifeCycle: 'Complete generation in 7-10 days in warm weather. Females can reproduce without mating.',
-        treatment: 'Immediate action: Spray off with water, apply neem oil spray every 3 days',
-        prevention: 'Encourage beneficial insects, avoid over-fertilizing with nitrogen, use reflective mulch',
-        organicTreatment: 'Neem oil (0.5%), insecticidal soap spray, release ladybugs (1500 per affected area), plant companion flowers like marigold',
-        chemicalTreatment: 'Imidacloprid soil drench for severe infestations, Acetamiprid foliar spray (follow label rates)',
-        timeline: 'Visible reduction in 2-3 days, full control in 7-10 days with consistent treatment',
-        seasonality: 'Most active in spring and fall, reproduce rapidly in temperatures 65-80°F',
-        economicImpact: 'Can reduce yields by 10-30% if left untreated, also vector for plant viruses'
-      },
-      'bollworm': {
-        name: 'Cotton Bollworm',
-        confidence: Math.floor(Math.random() * 10 + 90) + '%',
-        severity: 'High',
-        scientificName: 'Helicoverpa armigera',
-        description: 'Large caterpillars (up to 40mm) that bore into fruits, flowers, and young shoots. They are among the most destructive agricultural pests, causing direct damage and yield loss.',
-        symptoms: [
-          'Small circular holes in fruits, flowers, or young shoots',
-          'Brown frass (caterpillar droppings) near entry holes',
-          'Premature dropping of damaged fruits',
-          'Hollow or partially eaten seeds inside bolls',
-          'Caterpillars visible inside damaged fruits',
-          'Wilting of growing tips where larvae have bored'
-        ],
-        identificationTips: 'Look for entry holes with frass, cut open affected fruits to find caterpillars. Larvae vary from green to brown with distinctive stripes.',
-        lifeCycle: '28-35 days from egg to adult. 4-6 generations per year depending on climate.',
-        treatment: 'Immediate removal of affected fruits, Bt spray application in evening hours',
-        prevention: 'Pheromone traps for monitoring, crop rotation, removal of crop residues after harvest',
-        organicTreatment: 'Bacillus thuringiensis (Bt) spray every 5-7 days, release Trichogramma wasps (50,000 per hectare), NPV (Nuclear Polyhedrosis Virus)',
-        chemicalTreatment: 'Chlorantraniliprole 18.5% SC @ 60ml/acre, Flubendiamide 480 SC @ 24ml/10L water (rotate chemicals to prevent resistance)',
-        timeline: 'Monitor daily, treatment effects visible in 3-5 days, repeat every 7-10 days during peak season',
-        seasonality: 'Peak activity during flowering and fruiting stages, multiple generations per crop season',
-        economicImpact: 'Can cause 20-80% yield loss in severe infestations, affects both quantity and quality of harvest'
-      },
-      'whitefly': {
-        name: 'Tobacco Whitefly',
-        confidence: Math.floor(Math.random() * 12 + 78) + '%',
-        severity: 'Medium',
-        scientificName: 'Bemisia tabaci',
-        description: 'Tiny white flying insects (1-2mm) that feed on plant sap and transmit serious viral diseases. They reproduce rapidly and can quickly overwhelm crops.',
-        symptoms: [
-          'Clouds of tiny white flies when plants are disturbed',
-          'Yellow, irregular patches on leaves',
-          'Sticky honeydew on leaf surfaces',
-          'Yellowing and premature dropping of leaves',
-          'Stunted plant growth',
-          'Viral symptoms like leaf curl, mosaic patterns, or yellowing'
-        ],
-        identificationTips: 'Adult flies are tiny and white, found on leaf undersides. Nymphs are scale-like and translucent. Look for yellow sticky traps.',
-        lifeCycle: '15-30 days depending on temperature. Females lay 50-400 eggs on leaf undersides.',
-        treatment: 'Yellow sticky traps placement, neem oil spray in early morning or evening',
-        prevention: 'Use reflective silver mulch, install insect-proof nets, quarantine new plants',
-        organicTreatment: 'Yellow sticky traps (20-25 per acre), neem oil 3ml/L water, insecticidal soap spray, encourage parasitic wasps',
-        chemicalTreatment: 'Thiamethoxam 25% WG @ 100g/acre, Acetamiprid 20% SP @ 50-60g/acre (alternate between different chemical groups)',
-        timeline: 'Trap monitoring weekly, spray treatments every 5-7 days, population control visible in 10-14 days',
-        seasonality: 'Year-round in tropical regions, peak during warm dry periods',
-        economicImpact: 'Direct feeding damage plus virus transmission can cause 20-100% crop loss'
-      },
-      'thrips': {
-        name: 'Western Flower Thrips',
-        confidence: Math.floor(Math.random() * 8 + 85) + '%',
-        severity: 'Low',
-        scientificName: 'Frankliniella occidentalis',
-        description: 'Tiny slender insects (1-2mm) that rasp plant surfaces and suck cell contents, leaving characteristic silvery scars and black spots on leaves.',
-        symptoms: [
-          'Silver or bronze streaks on leaf surfaces',
-          'Tiny black spots (thrips excrement) on leaves',
-          'Stippled or scarred appearance on upper leaf surfaces',
-          'Distorted growth of young leaves and shoots',
-          'Reduced photosynthesis leading to poor plant vigor',
-          'Premature leaf drop in severe cases'
-        ],
-        identificationTips: 'Use blue sticky traps. Look for tiny yellowish insects that jump when disturbed. Check flowers and young leaves.',
-        lifeCycle: '12-15 days in warm conditions. Pupate in soil. Multiple generations per season.',
-        treatment: 'Blue sticky traps, predatory mites release, avoid over-fertilization with nitrogen',
-        prevention: 'Proper plant spacing for air circulation, remove weeds that serve as alternate hosts, avoid dusty conditions',
-        organicTreatment: 'Blue sticky traps (15-20 per acre), predatory mites (Amblyseius cucumeris), spinosad-based sprays',
-        chemicalTreatment: 'Abamectin 1.9% EC @ 400-500ml/acre, Fipronil 5% SC @ 400ml/acre (use only when necessary)',
-        timeline: 'Monitor with traps weekly, biological control shows results in 2-3 weeks, chemical control in 3-5 days',
-        seasonality: 'Active year-round in greenhouses, peak activity in warm dry conditions',
-        economicImpact: 'Moderate yield impact (5-15%) but can reduce market quality of leafy vegetables and flowers'
-      },
-      'leafminer': {
-        name: 'Vegetable Leafminer',
-        confidence: Math.floor(Math.random() * 10 + 82) + '%',
-        severity: 'Medium',
-        scientificName: 'Liriomyza sativae',
-        description: 'Small fly larvae that tunnel between leaf surfaces, creating distinctive serpentine mines that reduce photosynthetic capacity and plant vigor.',
-        symptoms: [
-          'Winding white or clear tunnels (mines) in leaves',
-          'Small puncture marks where adults feed and lay eggs',
-          'Yellowing along the mining trails',
-          'Reduced leaf area available for photosynthesis',
-          'Premature leaf drop in severe infestations',
-          'Secondary bacterial or fungal infections through wounds'
-        ],
-        identificationTips: 'Look for characteristic serpentine mines in leaves. Adult flies are small (2-3mm) and yellow-black.',
-        lifeCycle: '15-21 days from egg to adult. Up to 12 generations per year in favorable conditions.',
-        treatment: 'Remove affected leaves, yellow sticky traps, parasitic wasp release',
-        prevention: 'Crop rotation, reflective mulches, remove alternate weed hosts around fields',
-        organicTreatment: 'Remove mined leaves, yellow sticky traps, release parasitic wasps (Diglyphus isaea), neem oil spray',
-        chemicalTreatment: 'Abamectin foliar spray, Cyromazine for larval control (follow integrated resistance management)',
-        timeline: 'Remove damaged leaves immediately, parasitic control effective in 2-3 weeks, monitor weekly',
-        seasonality: 'Year-round problem in protected cultivation, peaks during warm weather',
-        economicImpact: 'Can reduce marketable yield by 15-25% in leafy vegetables, affects visual quality significantly'
-      }
-    };
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image file provided',
+        message: 'Please upload an image for pest detection'
+      });
+    }
 
-    // Simulate image analysis - in real implementation, this would analyze the actual uploaded image
-    function simulateImageAnalysis() {
-      const pestTypes = Object.keys(pestDatabase);
-      const detectedPest = pestTypes[Math.floor(Math.random() * pestTypes.length)];
-      return pestDatabase[detectedPest];
+    let district = 'Punjab';
+    
+    if (req.user && !req.user.guest) {
+      const user = await User.findByPk(req.user.userId);
+      district = user?.district || req.body.userDistrict || 'Punjab';
+    } else {
+      district = req.body.userDistrict || req.user?.district || 'Punjab';
     }
     
-    // Simulate AI image analysis
-    const detectedPest = simulateImageAnalysis();
-    
+    let result;
+
+    // Try to use Gemini Vision for real image analysis
+    if (geminiVisionModel) {
+      try {
+        // Convert image buffer to base64
+        const imageBase64 = req.file.buffer.toString('base64');
+        
+        const prompt = `You are an expert agricultural pathologist. Analyze this crop image carefully and identify any pests, diseases, or issues.
+
+IMPORTANT: Respond in this EXACT format:
+Pest/Disease Name: [specific name or "Healthy Plant" if no issues]
+Confidence: [number between 1-100]
+Severity: [Low/Moderate/High/Critical]
+Description: [detailed description of what you see]
+Treatment: [specific treatment advice]
+
+Look for:
+- Insects: aphids, caterpillars, beetles, hoppers
+- Diseases: spots, wilting, discoloration, mold
+- Nutrient issues: yellowing, stunting, leaf burn
+- Physical damage: holes, tears, browning
+
+If the image shows a healthy plant, say so clearly. If unclear or not a plant image, mention that.`;
+
+        const imagePart = {
+          inlineData: {
+            data: imageBase64,
+            mimeType: req.file.mimetype
+          }
+        };
+
+        const geminiResult = await geminiVisionModel.generateContent([prompt, imagePart]);
+        const response = geminiResult.response;
+        const analysis = response.text();
+
+        // Parse the AI response to extract structured data
+        result = parseGeminiPestResponse(analysis, district);
+
+      } catch (geminiError) {
+        console.log('Gemini Vision failed, using fallback:', geminiError.message);
+        result = getFallbackPestDetection(district);
+      }
+    } else {
+      // Use fallback detection
+      result = getFallbackPestDetection(district);
+    }
+
     res.status(200).json({
       success: true,
-      detection: {
-        pest: detectedPest.name,
-        scientificName: detectedPest.scientificName,
-        confidence: detectedPest.confidence,
-        severity: detectedPest.severity,
-        description: detectedPest.description,
-        symptoms: detectedPest.symptoms,
-        identificationTips: detectedPest.identificationTips,
-        lifeCycle: detectedPest.lifeCycle,
-        treatment: detectedPest.treatment,
-        prevention: detectedPest.prevention,
-        organicTreatment: detectedPest.organicTreatment,
-        chemicalTreatment: detectedPest.chemicalTreatment,
-        timeline: detectedPest.timeline,
-        seasonality: detectedPest.seasonality,
-        economicImpact: detectedPest.economicImpact
-      },
-      imageAnalysis: {
-        processingTime: Math.floor(Math.random() * 3000 + 1000) + 'ms',
-        algorithm: 'Deep Learning CNN Model v2.1',
-        features: [
-          'Color pattern analysis',
-          'Shape and size detection', 
-          'Damage pattern recognition',
-          'Comparative species matching'
-        ]
-      },
-      timestamp: new Date().toISOString()
+      pestName: result.pestName,
+      confidence: result.confidence,
+      severity: result.severity,
+      description: result.description,
+      treatment: result.treatment,
+      symptoms: result.symptoms,
+      cropAffected: result.cropAffected,
+      season: result.season,
+      aiSource: geminiVisionModel ? 'gemini-vision' : 'fallback'
     });
+
   } catch (error) {
+    console.error('Pest detection error:', error);
     res.status(500).json({
-      error: 'Pest detection error',
+      error: 'Pest detection failed',
       message: error.message
     });
   }
 });
 
-// Default route - serve main HTML
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, '../index.html'));
+// Helper function to parse Gemini response
+function parseGeminiPestResponse(analysis, district) {
+  console.log('🔍 Raw Gemini analysis:', analysis);
+  
+  const lines = analysis.split('\n');
+  let pestName = 'Unknown Issue';
+  let confidence = 0.75;
+  let severity = 'Moderate';
+  let description = 'Image analysis completed';
+  let treatment = 'Consult with local agricultural expert';
+
+  // Extract structured information from AI response
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    if (trimmedLine.includes('Pest/Disease Name:')) {
+      pestName = trimmedLine.split('Pest/Disease Name:')[1]?.trim() || pestName;
+    }
+    if (trimmedLine.includes('Confidence:')) {
+      const conf = trimmedLine.split('Confidence:')[1]?.trim();
+      const confNum = parseFloat(conf.replace('%', ''));
+      if (!isNaN(confNum)) {
+        confidence = confNum / 100;
+      }
+    }
+    if (trimmedLine.includes('Severity:')) {
+      severity = trimmedLine.split('Severity:')[1]?.trim() || severity;
+    }
+    if (trimmedLine.includes('Description:')) {
+      description = trimmedLine.split('Description:')[1]?.trim() || description;
+    }
+    if (trimmedLine.includes('Treatment:')) {
+      treatment = trimmedLine.split('Treatment:')[1]?.trim() || treatment;
+    }
+  }
+
+  // Generate symptoms based on the description
+  const symptoms = [];
+  if (description.toLowerCase().includes('yellow')) symptoms.push('Yellowing of leaves');
+  if (description.toLowerCase().includes('spot')) symptoms.push('Spots on foliage');
+  if (description.toLowerCase().includes('wilt')) symptoms.push('Wilting symptoms');
+  if (description.toLowerCase().includes('hole')) symptoms.push('Holes in leaves');
+  if (symptoms.length === 0) symptoms.push('Visual analysis completed');
+
+  console.log('✅ Parsed result:', { pestName, confidence, severity, description: description.substring(0, 100) });
+
+  return {
+    pestName,
+    confidence,
+    severity,
+    description,
+    treatment,
+    symptoms,
+    cropAffected: `Analyzed crop in ${district}`,
+    season: 'Real-time analysis'
+  };
+}
+
+// Fallback pest detection function
+function getFallbackPestDetection(district) {
+  // This function should only be called when Gemini Vision fails
+  // Return a message indicating the AI analysis is unavailable
+  return {
+    pestName: 'Image Analysis Unavailable',
+    confidence: 0.0,
+    severity: 'Unknown',
+    description: 'AI image analysis is currently unavailable. Please ensure you uploaded a clear image of your crop showing any symptoms.',
+    treatment: 'For accurate pest identification, please consult with local agricultural experts or visit your nearest Krishi Vigyan Kendra.',
+    symptoms: ['Clear image required', 'Upload a focused crop image', 'Ensure good lighting conditions'],
+    cropAffected: `General crops in ${district}`,
+    season: 'Image analysis needed'
+  };
+}
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    service: 'AgroAI Backend',
+    version: '1.0.0'
+  });
 });
 
-// Database initialization and server start
+// Start server
 async function startServer() {
   try {
     console.log('🔄 Connecting to PostgreSQL database...');
@@ -845,7 +1029,7 @@ async function startServer() {
     console.log('✅ PostgreSQL connected successfully');
     
     console.log('🔄 Synchronizing database models...');
-    await sequelize.sync({ alter: true });
+    await sequelize.sync();
     console.log('✅ Database models synchronized');
     
     app.listen(PORT, () => {
@@ -853,6 +1037,7 @@ async function startServer() {
       console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🗄️  Database: PostgreSQL (${process.env.DB_HOST}:${process.env.DB_PORT}/${process.env.DB_NAME})`);
       console.log(`📱 SMS Service: ${twilioClient ? 'Twilio (Real)' : 'Simulation Mode'}`);
+      console.log(`🤖 AI Service: ${geminiModel ? 'Gemini AI (Real)' : 'Simulation Mode'}`);
       console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
       console.log(`🌾 Frontend: http://localhost:${PORT}`);
     });
@@ -863,7 +1048,7 @@ async function startServer() {
     console.log('1. Install PostgreSQL: https://www.postgresql.org/download/');
     console.log('2. Create database: CREATE DATABASE agroai;');
     console.log('3. Update .env file with your PostgreSQL credentials');
-    console.log('4. Optional: Add Twilio credentials for real SMS');
+    console.log('4. Add GEMINI_API_KEY to .env for AI features');
     process.exit(1);
   }
 }
