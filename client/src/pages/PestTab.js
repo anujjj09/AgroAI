@@ -1,7 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { API } from '../utils/api';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const PestTab = ({ user }) => {
+  const { t } = useLanguage();
   const [selectedImage, setSelectedImage] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -158,9 +160,9 @@ const PestTab = ({ user }) => {
       <div className="pest-header">
         <h2>
           <i className="fas fa-bug"></i>
-          Pest & Disease Detection
+          {t('pestDetection.title')}
         </h2>
-        <p>Upload a photo of your crop to get instant pest and disease identification</p>
+        <p>{t('pestDetection.uploadImage')}</p>
       </div>
 
       {/* Image Upload Section */}
@@ -169,16 +171,16 @@ const PestTab = ({ user }) => {
           {!previewUrl ? (
             <div className="upload-area" onClick={() => fileInputRef.current?.click()}>
               <i className="fas fa-camera" style={{ fontSize: '3rem', color: '#4CAF50', marginBottom: '20px' }}></i>
-              <h3>Take or Upload Photo</h3>
-              <p>Capture your crop's leaves, stems, or affected areas</p>
+              <h3>{t('pestDetection.uploadImage')}</h3>
+              <p>{t('pestDetection.captureHint')}</p>
               <div className="upload-buttons">
                 <button className="upload-btn camera" onClick={takePhoto}>
                   <i className="fas fa-camera"></i>
-                  Take Photo
+                  {t('pestDetection.takePhoto')}
                 </button>
                 <button className="upload-btn gallery" onClick={() => fileInputRef.current?.click()}>
                   <i className="fas fa-image"></i>
-                  Choose from Gallery
+                  {t('pestDetection.chooseGallery')}
                 </button>
               </div>
             </div>
@@ -190,18 +192,18 @@ const PestTab = ({ user }) => {
                   {analyzing ? (
                     <>
                       <i className="fas fa-spinner fa-spin"></i>
-                      Analyzing...
+                      {t('pestDetection.analyzing')}
                     </>
                   ) : (
                     <>
                       <i className="fas fa-search"></i>
-                      Analyze Image
+                      {t('pestDetection.analyzeImage')}
                     </>
                   )}
                 </button>
                 <button onClick={clearImage} className="clear-btn">
                   <i className="fas fa-times"></i>
-                  Clear
+                  {t('pestDetection.clear')}
                 </button>
               </div>
             </div>
@@ -229,10 +231,10 @@ const PestTab = ({ user }) => {
                 <div className="result-header">
                   <h3>
                     <i className="fas fa-microscope"></i>
-                    Detection Result
+                    {t('pestDetection.detectionResult')}
                   </h3>
                   <div className="confidence-score">
-                    {Math.round(result.confidence * 100)}% Match
+                    {Math.round(result.confidence * 100)}% {t('pestDetection.match')}
                   </div>
                 </div>
 
@@ -244,7 +246,7 @@ const PestTab = ({ user }) => {
                     {result.severity && (
                       <div className={`severity-badge ${result.severity.toLowerCase().replace(' ', '-')}`}>
                         <i className="fas fa-exclamation-circle"></i>
-                        {result.severity} Severity
+                        {result.severity} {t('pestDetection.severity')}
                       </div>
                     )}
                     
@@ -268,7 +270,7 @@ const PestTab = ({ user }) => {
                   <div className="symptoms-section">
                     <h5>
                       <i className="fas fa-list-ul"></i>
-                      Key Symptoms
+                      {t('pestDetection.keySymptoms')}
                     </h5>
                     <div className="symptoms-grid">
                       {result.symptoms.map((symptom, index) => (
@@ -285,7 +287,7 @@ const PestTab = ({ user }) => {
                   <div className="treatment-section">
                     <h5>
                       <i className="fas fa-medkit"></i>
-                      Recommended Treatment
+                      {t('pestDetection.recommendedTreatment')}
                     </h5>
                     <p className="treatment-text">{result.treatment}</p>
                   </div>

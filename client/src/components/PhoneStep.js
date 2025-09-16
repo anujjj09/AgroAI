@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import { apiCall } from '../utils/api';
 
 const PhoneStep = ({ onSuccess }) => {
+  const { t } = useLanguage();
   const [phoneNumber, setPhoneNumber] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -10,7 +12,7 @@ const PhoneStep = ({ onSuccess }) => {
     e.preventDefault();
     
     if (!phoneNumber || phoneNumber.length < 10) {
-      setError('Please enter a valid phone number with at least 10 digits');
+      setError(t('auth.enterPhone'));
       return;
     }
 
@@ -45,23 +47,23 @@ const PhoneStep = ({ onSuccess }) => {
     <>
       <div style={{ textAlign: 'center', marginBottom: '25px' }}>
         <i className="fas fa-tractor" style={{ fontSize: '3rem', color: '#4CAF50', marginBottom: '15px' }}></i>
-        <h2 style={{ marginBottom: '15px', color: '#2E7D32' }}>🌾 Join AgroAI Community</h2>
+        <h2 style={{ marginBottom: '15px', color: '#2E7D32' }}>🌾 {t('auth.login')}</h2>
         <p style={{ color: '#388E3C', marginBottom: '20px', fontSize: '1.1rem' }}>
-          <i className="fas fa-mobile-alt"></i> Enter your mobile number to access smart farming insights
+          <i className="fas fa-mobile-alt"></i> {t('auth.phoneNumber')}
         </p>
       </div>
 
       <form onSubmit={handleSubmit}>
         <div className="input-group">
           <label htmlFor="phoneNumber">
-            <i className="fas fa-mobile-alt"></i> Farmer's Mobile Number
+            <i className="fas fa-mobile-alt"></i> {t('auth.phoneNumber')}
           </label>
           <input
             type="tel"
             id="phoneNumber"
             value={phoneNumber}
             onChange={(e) => setPhoneNumber(e.target.value)}
-            placeholder="Your mobile number (10 digits)"
+            placeholder={t('auth.phoneNumber')}
             maxLength="10"
             required
           />
@@ -70,11 +72,11 @@ const PhoneStep = ({ onSuccess }) => {
         <button type="submit" className="btn" disabled={loading}>
           {loading ? (
             <>
-              <i className="fas fa-spinner fa-spin"></i> Sending Code...
+              <i className="fas fa-spinner fa-spin"></i> {t('common.loading')}
             </>
           ) : (
             <>
-              <i className="fas fa-paper-plane"></i> Send Farm Access Code
+              <i className="fas fa-paper-plane"></i> {t('auth.sendOtp')}
             </>
           )}
         </button>

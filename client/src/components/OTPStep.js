@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 import { apiCall } from '../utils/api';
 
 const OTPStep = ({ phoneNumber, onSuccess }) => {
+  const { t } = useLanguage();
   const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -10,7 +12,7 @@ const OTPStep = ({ phoneNumber, onSuccess }) => {
     e.preventDefault();
     
     if (!/^\d{6}$/.test(otp)) {
-      setError('Please enter a valid 6-digit OTP');
+      setError(t('auth.invalidOtp'));
       return;
     }
 

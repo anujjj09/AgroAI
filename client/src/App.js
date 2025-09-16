@@ -3,8 +3,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import './App.css';
 import AuthPage from './pages/AuthPage';
 import Dashboard from './pages/Dashboard';
-
 import Navbar from './components/Navbar';
+import { LanguageProvider } from './contexts/LanguageContext';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -35,38 +35,40 @@ function App() {
   };
 
   return (
-    <Router>
-      <div className="App">
-        {user && token && <Navbar user={user} onLogout={handleLogout} />}
-        <div className={user && token ? "dashboard-layout" : ""}>
-          <div className={user && token ? "main-content" : ""}>
-            <Routes>
-              <Route 
-                path="/" 
-                element={
-                  user && token ? (
-                    <Navigate to="/dashboard" replace />
-                  ) : (
-                    <AuthPage onLogin={handleLogin} />
-                  )
-                } 
-              />
-              <Route 
-                path="/dashboard" 
-                element={
-                  user && token ? (
-                    <Dashboard user={user} token={token} onLogout={handleLogout} />
-                  ) : (
-                    <Navigate to="/" replace />
-                  )
-                } 
-              />
+    <LanguageProvider>
+      <Router>
+        <div className="App">
+          {user && token && <Navbar user={user} onLogout={handleLogout} />}
+          <div className={user && token ? "dashboard-layout" : ""}>
+            <div className={user && token ? "main-content" : ""}>
+              <Routes>
+                <Route 
+                  path="/" 
+                  element={
+                    user && token ? (
+                      <Navigate to="/dashboard" replace />
+                    ) : (
+                      <AuthPage onLogin={handleLogin} />
+                    )
+                  } 
+                />
+                <Route 
+                  path="/dashboard" 
+                  element={
+                    user && token ? (
+                      <Dashboard user={user} token={token} onLogout={handleLogout} />
+                    ) : (
+                      <Navigate to="/" replace />
+                    )
+                  } 
+                />
 
-            </Routes>
+              </Routes>
+            </div>
           </div>
         </div>
-      </div>
-    </Router>
+      </Router>
+    </LanguageProvider>
   );
 }
 

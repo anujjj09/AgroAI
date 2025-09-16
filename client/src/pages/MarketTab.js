@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const MarketTab = ({ user }) => {
+  const { t } = useLanguage();
   const [marketData, setMarketData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('grains');
@@ -44,9 +46,9 @@ const MarketTab = ({ user }) => {
   };
 
   const categories = [
-    { id: 'grains', name: 'Grains & Cereals', icon: 'fas fa-seedling' },
-    { id: 'vegetables', name: 'Vegetables', icon: 'fas fa-carrot' },
-    { id: 'fruits', name: 'Fruits', icon: 'fas fa-apple-alt' }
+    { id: 'grains', name: t('market.categories.grains'), icon: 'fas fa-seedling' },
+    { id: 'vegetables', name: t('market.categories.vegetables'), icon: 'fas fa-carrot' },
+    { id: 'fruits', name: t('market.categories.fruits'), icon: 'fas fa-apple-alt' }
   ];
 
   const currentData = marketData?.[selectedCategory] || [];
@@ -56,12 +58,12 @@ const MarketTab = ({ user }) => {
       <div className="market-header">
         <h2>
           <i className="fas fa-chart-line"></i>
-          Market Prices - Punjab
+          {t('market.title')} - Punjab
         </h2>
         <div className="market-info">
           <span className="last-updated">
             <i className="fas fa-clock"></i>
-            Last updated: {new Date().toLocaleTimeString()}
+            {t('market.lastUpdated')}: {new Date().toLocaleTimeString()}
           </span>
         </div>
       </div>
@@ -84,7 +86,7 @@ const MarketTab = ({ user }) => {
       {loading ? (
         <div className="loading-container">
           <i className="fas fa-spinner fa-spin"></i>
-          <p>Loading market data...</p>
+          <p>{t('market.loading')}</p>
         </div>
       ) : (
         <div className="market-grid">
@@ -118,28 +120,28 @@ const MarketTab = ({ user }) => {
       <div className="market-tips">
         <h3>
           <i className="fas fa-lightbulb"></i>
-          Market Tips
+          {t('market.marketTips')}
         </h3>
         <div className="tips-grid">
           <div className="tip-card">
             <i className="fas fa-clock"></i>
-            <h4>Best Market Time</h4>
-            <p>Morning hours (6-10 AM) typically offer better prices in agricultural markets.</p>
+            <h4>{t('market.tips.bestTime.title')}</h4>
+            <p>{t('market.tips.bestTime.desc')}</p>
           </div>
           <div className="tip-card">
             <i className="fas fa-balance-scale"></i>
-            <h4>Quality Matters</h4>
-            <p>Grade A quality can fetch 15-25% higher prices than regular produce.</p>
+            <h4>{t('market.tips.quality.title')}</h4>
+            <p>{t('market.tips.quality.desc')}</p>
           </div>
           <div className="tip-card">
             <i className="fas fa-truck"></i>
-            <h4>Transportation</h4>
-            <p>Consider nearby mandis to reduce transportation costs and increase profits.</p>
+            <h4>{t('market.tips.transportation.title')}</h4>
+            <p>{t('market.tips.transportation.desc')}</p>
           </div>
           <div className="tip-card">
             <i className="fas fa-calendar-alt"></i>
-            <h4>Seasonal Planning</h4>
-            <p>Plan your crops based on seasonal demand patterns for maximum returns.</p>
+            <h4>{t('market.tips.seasonal.title')}</h4>
+            <p>{t('market.tips.seasonal.desc')}</p>
           </div>
         </div>
       </div>

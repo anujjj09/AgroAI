@@ -3,9 +3,11 @@ import WeatherTab from './WeatherTab';
 import MarketTab from './MarketTab';
 import ChatTab from './ChatTab';
 import PestTab from './PestTab';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const Dashboard = ({ user, token, onLogout }) => {
   const [activeTab, setActiveTab] = useState('weather');
+  const { t } = useLanguage();
 
   return (
     <div className="container">
@@ -14,7 +16,7 @@ const Dashboard = ({ user, token, onLogout }) => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <h2 style={{ color: '#2E7D32', marginBottom: '5px' }}>
-              <i className="fas fa-tractor"></i> Welcome to your Farm Dashboard
+              <i className="fas fa-tractor"></i> {t('home.welcome')}
             </h2>
             <p style={{ color: '#388E3C', margin: '0' }}>
               <i className="fas fa-map-marker-alt"></i> {user.district} • 
@@ -32,10 +34,10 @@ const Dashboard = ({ user, token, onLogout }) => {
 
       <div className="tabs" style={{ display: 'flex', background: 'white', borderRadius: '10px', overflow: 'hidden', margin: '20px 0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
         {[
-          { id: 'weather', icon: 'fas fa-cloud-sun', label: 'Farm Weather' },
-          { id: 'market', icon: 'fas fa-chart-line', label: 'Crop Prices' },
-          { id: 'chat', icon: 'fas fa-robot', label: 'AI Assistant' },
-          { id: 'pest', icon: 'fas fa-bug', label: 'Pest Detection' }
+          { id: 'weather', icon: 'fas fa-cloud-sun', label: t('home.weatherInfo') },
+          { id: 'market', icon: 'fas fa-chart-line', label: t('market.title') },
+          { id: 'chat', icon: 'fas fa-robot', label: t('home.aiChat') },
+          { id: 'pest', icon: 'fas fa-bug', label: t('pestDetection.title') }
         ].map(tab => (
           <button
             key={tab.id}
