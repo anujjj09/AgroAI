@@ -1,6 +1,8 @@
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://your-backend-url.com' 
-  : 'http://localhost:5000';
+// Use environment variable or fallback to appropriate defaults
+const API_BASE_URL = process.env.REACT_APP_API_URL || 
+  (process.env.NODE_ENV === 'production' 
+    ? window.location.origin  // Use same origin in production
+    : 'http://localhost:5000');
 
 export const apiCall = async (endpoint, options = {}) => {
   const url = `${API_BASE_URL}${endpoint}`;

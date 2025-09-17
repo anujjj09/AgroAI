@@ -133,9 +133,27 @@ const OTP = sequelize.define('OTP', {
   }
 });
 
-// Middleware
+// Middleware - Configure CORS for both development and production
+const allowedOrigins = [
+  'http://localhost:3000', 
+  'http://localhost:3001', 
+  'http://127.0.0.1:5500', 
+  'file://',
+  'https://agroai-punjab.netlify.app',  // Add your Netlify URL here
+  'https://your-frontend-domain.com'     // Add any other frontend domains
+];
+
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://localhost:3001', 'http://127.0.0.1:5500', 'file://'],
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, etc.)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
