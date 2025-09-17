@@ -259,16 +259,6 @@ app.get('/api/health', async (req, res) => {
   }
 });
 
-// Simple test endpoint for debugging API connectivity
-app.post('/api/test', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'API connection test successful',
-    timestamp: new Date().toISOString(),
-    received: req.body
-  });
-});
-
 // Test endpoint for debugging
 app.post('/api/test-chat', async (req, res) => {
   try {
