@@ -52,6 +52,13 @@ const ChatTab = ({ user, token }) => {
     setLoading(true);
 
     try {
+      console.log('🚀 Sending AI request:', {
+        message: userMessage.content,
+        user: user?.name,
+        district: user?.district,
+        language: user?.language
+      });
+      
       const response = await API.post('/api/ai/chat', {
         message: userMessage.content,
         userContext: {
@@ -60,6 +67,8 @@ const ChatTab = ({ user, token }) => {
           language: user?.language
         }
       });
+
+      console.log('✅ AI Response received:', response);
 
       const aiMessage = {
         id: Date.now() + 1,
@@ -70,12 +79,26 @@ const ChatTab = ({ user, token }) => {
 
       setMessages(prev => [...prev, aiMessage]);
     } catch (error) {
-      console.log('Backend AI failed, showing error:', error);
+      console.error('❌ Backend AI failed:', error);
+      
+      // Provide a helpful fallback response based on the user's message
+      let fallbackContent;
+      const msg = userMessage.content.toLowerCase();
+      
+      if (msg.includes('weather') || msg.includes('मौसम') || msg.includes('ਮੌਸਮ')) {
+        fallbackContent = 'Weather information is available in the Weather tab. Please check there for current conditions and forecasts.';
+      } else if (msg.includes('crop') || msg.includes('farming') || msg.includes('फसल') || msg.includes('ਖੇਤੀ')) {
+        fallbackContent = 'For crop-related questions, I recommend checking the Market tab for current prices and trends. Common crops in Punjab include wheat, rice, cotton, and sugarcane.';
+      } else if (msg.includes('pest') || msg.includes('disease') || msg.includes('कीट') || msg.includes('ਕੀੜੇ')) {
+        fallbackContent = 'For pest identification and treatment, please use the Pest Detection tab where you can upload photos for analysis.';
+      } else {
+        fallbackContent = `Sorry, I'm having trouble connecting to the AI service right now. Please try again in a moment, or check the other tabs for weather, market prices, and pest detection features.`;
+      }
       
       const aiMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: 'Sorry, I am currently having trouble connecting to the AI service. Please try again in a moment.',
+        content: fallbackContent,
         timestamp: new Date()
       };
       setMessages(prev => [...prev, aiMessage]);
