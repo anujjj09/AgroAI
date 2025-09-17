@@ -139,8 +139,8 @@ const allowedOrigins = [
   'http://localhost:3001', 
   'http://127.0.0.1:5500', 
   'file://',
-  'https://agroai-punjab.netlify.app',  // Add your Netlify URL here
-  'https://your-frontend-domain.com'     // Add any other frontend domains
+  'https://agro-ai-app.netlify.app',  // Production Netlify URL
+  'https://agroai-punjab.netlify.app'  // Alternative URL if needed
 ];
 
 app.use(cors({
@@ -257,6 +257,16 @@ app.get('/api/health', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Simple test endpoint for debugging API connectivity
+app.post('/api/test', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: 'API connection test successful',
+    timestamp: new Date().toISOString(),
+    received: req.body
+  });
 });
 
 // Test endpoint for debugging

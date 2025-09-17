@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useLanguage } from '../contexts/LanguageContext';
+import { apiCall } from '../utils/api';
 
 const WeatherTab = ({ user }) => {
   const { t } = useLanguage();
@@ -15,14 +16,8 @@ const WeatherTab = ({ user }) => {
       // Get the district from user or use default
       const district = user?.district || 'Ludhiana';
       
-      // Call the backend weather API
-      const response = await fetch(`http://localhost:5000/api/weather/${district}`);
-      
-      if (!response.ok) {
-        throw new Error(`Weather API error: ${response.status}`);
-      }
-      
-      const apiData = await response.json();
+      // Call the backend weather API using apiCall utility
+      const apiData = await apiCall(`/api/weather/${district}`, { method: 'GET' });
       
       if (!apiData.success) {
         throw new Error('Weather API returned error');
