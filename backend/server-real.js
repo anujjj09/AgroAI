@@ -1763,11 +1763,11 @@ If no pests/diseases found, return empty detections array. Use specific pest nam
               inferenceTime: '1200ms',
               imageSize: {
                 original: { width: 640, height: 480 },
-                processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+                processed: { width: 640, height: 640 }
               },
               thresholds: {
-                confidence: YOLO_CONFIDENCE_THRESHOLD,
-                iou: YOLO_IOU_THRESHOLD
+                confidence: 0.5,
+                iou: 0.4
               },
               totalDetections: detections.length,
               note: 'Using Gemini Vision AI for intelligent image analysis. Place YOLOv8 model at /backend/models/yolov8_pest_detection.onnx for enhanced detection.'
@@ -1845,11 +1845,11 @@ If no pests/diseases found, return empty detections array. Use specific pest nam
             inferenceTime: '45ms',
             imageSize: {
               original: { width: imageMetadata.width || 640, height: imageMetadata.height || 480 },
-              processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+              processed: { width: 640, height: 640 }
             },
             thresholds: {
-              confidence: YOLO_CONFIDENCE_THRESHOLD,
-              iou: YOLO_IOU_THRESHOLD
+              confidence: 0.5,
+              iou: 0.4
             },
             totalDetections: selectedScenario.detections.length,
             note: `Intelligent simulation based on image analysis. Configure GEMINI_API_KEY or place YOLOv8 model for enhanced detection. Image: ${imageMetadata.width}×${imageMetadata.height}px`
@@ -1870,11 +1870,11 @@ If no pests/diseases found, return empty detections array. Use specific pest nam
             inferenceTime: '10ms',
             imageSize: {
               original: { width: 640, height: 480 },
-              processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+              processed: { width: 640, height: 640 }
             },
             thresholds: {
-              confidence: YOLO_CONFIDENCE_THRESHOLD,
-              iou: YOLO_IOU_THRESHOLD
+              confidence: 0.5,
+              iou: 0.4
             },
             totalDetections: 0,
             note: 'Basic simulation mode - No AI available. Configure GEMINI_API_KEY or place YOLOv8 model for real detection.'
