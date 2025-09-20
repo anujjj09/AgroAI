@@ -1666,8 +1666,8 @@ app.post('/api/yolo-detect', upload.single('image'), authenticateToken, async (r
       });
     }
 
-    // Check if YOLOv8 model is available
-    if (!yoloSession) {
+    // Check if YOLOv8 model is available (ensuring yoloSession exists and is properly initialized)
+    if (typeof yoloSession === 'undefined' || !yoloSession) {
       console.log('⚠️  YOLOv8 model not available, using Gemini Vision fallback');
       
       // Use Gemini Vision as intelligent fallback when YOLOv8 model is not available
