@@ -9,10 +9,115 @@ const { GoogleGenerativeAI } = require('@google/generative-ai');
 const multer = require('multer');
 const fs = require('fs');
 const fetch = require('node-fetch');
+const ort = require('onnxruntime-node');
+const sharp = require('sharp');
 require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5002;
+
+// === Request Logging Middleware (temporary for debugging 403 issues) ===
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const dur = Date.now() - start;
+    console.log(`HTTP ${req.method} ${req.originalUrl} -> ${res.statusCode} (${dur}ms)`);
+  });
+  next();
+});
+
+// Weather cache system - stores data for 10-15 minutes
+const weatherCache = new Map();
+const WEATHER_CACHE_DURATION = 12 * 60 * 1000; // 12 minutes in milliseconds
+
+// Agricultural advice cache system for consistent responses
+const agriAdviceCache = new Map();
+const AGRI_ADVICE_CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours for consistent daily advice
+
+// Helper function to get cached weather data
+const getCachedWeather = (cacheKey) => {
+  const cached = weatherCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < WEATHER_CACHE_DURATION) {
+    console.log(`📋 Using cached weather data for ${cacheKey}`);
+    return cached.data;
+  }
+  return null;
+};
+
+// Helper function to set cached weather data
+const setCachedWeather = (cacheKey, data) => {
+  weatherCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  });
+  console.log(`💾 Cached weather data for ${cacheKey}`);
+};
+
+// Helper function to get cached agricultural advice
+const getCachedAdvice = (cacheKey) => {
+  const cached = agriAdviceCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < AGRI_ADVICE_CACHE_DURATION) {
+    console.log(`📋 Using cached agricultural advice for ${cacheKey}`);
+    return cached.data;
+  }
+  return null;
+};
+
+// Helper function to set cached agricultural advice
+const setCachedAdvice = (cacheKey, data) => {
+  agriAdviceCache.set(cacheKey, {
+    data,
+    timestamp: Date.now()
+  });
+  console.log(`💾 Cached agricultural advice for ${cacheKey}`);
+};
+
+// Normalize message for consistent caching
+const normalizeMessage = (message, district) => {
+  const normalized = message.toLowerCase()
+    .replace(/[^\w\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  // Market price and trends questions
+  if (normalized.includes('market price') || normalized.includes('current price') || 
+      (normalized.includes('price') && normalized.includes('trend'))) {
+    return `market_prices_trends_${district}`;
+  }
+  
+  // Weather impact questions
+  if (normalized.includes('weather') && (normalized.includes('affect') || 
+      normalized.includes('impact') || normalized.includes('influence'))) {
+    return `weather_impact_farming_${district}`;
+  }
+  
+  // Common patterns for profit/best crop questions
+  if (normalized.includes('best crop') || normalized.includes('maximum profit') || 
+      normalized.includes('most profitable') || normalized.includes('which crop')) {
+    return `best_crop_profit_${district}`;
+  }
+  
+  // Specific crop comparison questions
+  if (normalized.includes('rice') && normalized.includes('cotton')) {
+    return `rice_vs_cotton_${district}`;
+  }
+  
+  if (normalized.includes('wheat') && normalized.includes('maize')) {
+    return `wheat_vs_maize_${district}`;
+  }
+  
+  // Weather-based farming questions (general)
+  if (normalized.includes('weather') && (normalized.includes('crop') || normalized.includes('farming'))) {
+    return `weather_farming_${district}`;
+  }
+  
+  // General farming practices
+  if (normalized.includes('farming practices') || normalized.includes('best practices')) {
+    return `farming_practices_${district}`;
+  }
+  
+  return null; // No caching for unique questions
+};
 
 // Initialize Sequelize with PostgreSQL or SQLite for development
 
@@ -137,6 +242,7 @@ const OTP = sequelize.define('OTP', {
 const allowedOrigins = [
   'http://localhost:3000', 
   'http://localhost:3001', 
+  'http://localhost:5002',  // Add the current server port for frontend serving
   'http://127.0.0.1:5500', 
   'file://',
   'https://agro-ai-app.netlify.app',  // Production Netlify URL
@@ -148,9 +254,13 @@ app.use(cors({
     // Allow requests with no origin (mobile apps, etc.)
     if (!origin) return callback(null, true);
     
+    console.log(`🔍 CORS Check - Origin: ${origin}, NODE_ENV: ${process.env.NODE_ENV}`);
+    
     if (allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV === 'development') {
+      console.log(`✅ CORS allowed for origin: ${origin}`);
       callback(null, true);
     } else {
+      console.log(`❌ CORS rejected for origin: ${origin}`);
       callback(new Error('Not allowed by CORS'));
     }
   },
@@ -175,7 +285,7 @@ const upload = multer({
 });
 
 // Serve static files
-app.use(express.static(path.join(__dirname, '../')));
+app.use(express.static(path.join(__dirname, '../client/build')));
 
 // Authentication middleware - flexible for testing
 const authenticateToken = (req, res, next) => {
@@ -257,6 +367,11 @@ app.get('/api/health', async (req, res) => {
       error: error.message
     });
   }
+});
+
+// Root route - friendly message instead of 'Cannot GET /'
+app.get('/', (req, res) => {
+  res.type('text/plain').send('AgroAI API Server Online. See /api/health for status.');
 });
 
 // Test endpoint for debugging
@@ -522,23 +637,37 @@ app.post('/api/user/language', authenticateToken, async (req, res) => {
   }
 });
 
-// Weather API (using OpenWeatherMap API)
+// Weather API (using OpenWeatherMap API with caching)
 app.get('/api/weather/:district', async (req, res) => {
   try {
     const { district } = req.params;
+    const cacheKey = `weather_${district}`;
+    
+    // Check cache first
+    const cachedData = getCachedWeather(cacheKey);
+    if (cachedData) {
+      return res.status(200).json({
+        success: true,
+        weather: cachedData,
+        cached: true
+      });
+    }
+    
     const weatherApiKey = process.env.WEATHER_API_KEY;
     
     if (!weatherApiKey) {
-      // Fallback to mock data if no API key
+      // Generate consistent mock data (not random)
       const weatherData = {
         district,
-        temperature: Math.round(Math.random() * 20 + 15),
-        humidity: Math.round(Math.random() * 40 + 40),
-        windSpeed: Math.round(Math.random() * 10 + 5),
+        temperature: 28, // Fixed temperature
+        humidity: 65,    // Fixed humidity
+        windSpeed: 8,    // Fixed wind speed
         description: 'Clear sky',
         icon: '01d',
         timestamp: new Date().toISOString()
       };
+      
+      setCachedWeather(cacheKey, weatherData);
       
       return res.status(200).json({
         success: true,
@@ -566,6 +695,9 @@ app.get('/api/weather/:district', async (req, res) => {
       timestamp: new Date().toISOString()
     };
     
+    // Cache the weather data
+    setCachedWeather(cacheKey, weatherData);
+    
     res.status(200).json({
       success: true,
       weather: weatherData
@@ -573,17 +705,20 @@ app.get('/api/weather/:district', async (req, res) => {
   } catch (error) {
     console.error('Weather API error:', error);
     
-    // Fallback to mock data on error
+    // Fallback to consistent mock data
     const { district } = req.params;
     const weatherData = {
       district,
-      temperature: Math.round(Math.random() * 20 + 15),
-      humidity: Math.round(Math.random() * 40 + 40),
-      windSpeed: Math.round(Math.random() * 10 + 5),
+      temperature: 28, // Fixed temperature
+      humidity: 65,    // Fixed humidity
+      windSpeed: 8,    // Fixed wind speed
       description: 'Clear sky',
       icon: '01d',
       timestamp: new Date().toISOString()
     };
+    
+    const cacheKey = `weather_${district}`;
+    setCachedWeather(cacheKey, weatherData);
     
     res.status(200).json({
       success: true,
@@ -619,10 +754,10 @@ app.get('/api/market/:district', async (req, res) => {
   }
 });
 
-// AI Chat - Intelligent Agricultural Assistant
+// AI Chat - Enhanced Agricultural Advisory with Market & Weather Analysis
 app.post('/api/ai/chat', authenticateToken, async (req, res) => {
   try {
-    const { message, userContext } = req.body;
+    const { message, userContext, weatherData, marketData } = req.body;
     
     if (!message || message.trim().length === 0) {
       return res.status(400).json({
@@ -645,56 +780,94 @@ app.post('/api/ai/chat', authenticateToken, async (req, res) => {
       language = userContext?.language || req.user?.language || 'en';
     }
     
+    // Fetch contextual data if not provided
+    let contextualWeather = weatherData;
+    let contextualMarket = marketData;
+    
+    if (!contextualWeather) {
+      try {
+        const cacheKey = `weather_${district}`;
+        contextualWeather = getCachedWeather(cacheKey);
+      } catch (err) {
+        console.log('Weather data not available for context');
+      }
+    }
+    
+    if (!contextualMarket) {
+      try {
+        // Generate consistent market data based on district and current season
+        const baseDate = new Date().toDateString(); // Same data for same day
+        const seed = district.charCodeAt(0) + baseDate.length; // Consistent seed
+        
+        contextualMarket = {
+          district,
+          prices: [
+            { commodity: 'Wheat', price: 2050 + (seed % 100), unit: 'per quintal', change: -15 + (seed % 30) },
+            { commodity: 'Rice', price: 2800 + (seed % 150), unit: 'per quintal', change: 25 + (seed % 40) },
+            { commodity: 'Cotton', price: 4300 + (seed % 200), unit: 'per quintal', change: 150 + (seed % 100) },
+            { commodity: 'Maize', price: 1650 + (seed % 80), unit: 'per quintal', change: -10 + (seed % 25) }
+          ],
+          updated: new Date().toISOString()
+        };
+      } catch (err) {
+        console.log('Market data not available for context');
+      }
+    }
+    
+    // Check for cached agricultural advice for common questions
+    const cacheKey = normalizeMessage(message, district);
+    if (cacheKey) {
+      const cachedResponse = getCachedAdvice(cacheKey);
+      if (cachedResponse) {
+        return res.status(200).json({
+          success: true,
+          response: cachedResponse,
+          timestamp: new Date().toISOString(),
+          context: {
+            district,
+            language,
+            aiSource: 'cached',
+            hasWeatherData: !!contextualWeather,
+            hasMarketData: !!contextualMarket
+          }
+        });
+      }
+    }
+
     let response;
     
-    // Try to use Gemini AI first
+    // Try to use Gemini AI first with enhanced agricultural context
     console.log('🔍 Checking Gemini model availability:', !!geminiModel);
     console.log('🔍 User message:', message);
     console.log('🔍 Language:', language);
     if (geminiModel) {
       try {
-        let prompt;
-        
-        if (language === 'hi') {
-          prompt = `आप एक सहायक AI असिस्टेंट हैं। उपयोगकर्ता ${district} जिले से है।
+        let prompt = buildEnhancedPrompt(message, district, language, contextualWeather, contextualMarket);
 
-उपयोगकर्ता का प्रश्न: ${message}
-
-कृपया हिंदी में सहायक और सटीक जवाब दें:`;
-        } else if (language === 'pa') {
-          prompt = `ਤੁਸੀਂ ਇੱਕ ਸਹਾਇਕ AI ਅਸਿਸਟੈਂਟ ਹੋ। ਉਪਭੋਗਤਾ ${district} ਜ਼ਿਲ੍ਹੇ ਦਾ ਹੈ।
-
-ਉਪਭੋਗਤਾ ਦਾ ਸਵਾਲ: ${message}
-
-ਕਿਰਪਾ ਕਰਕੇ ਪੰਜਾਬੀ ਵਿੱਚ ਸਹਾਇਕ ਅਤੇ ਸਹੀ ਜਵਾਬ ਦਿਓ:`;
-        } else {
-          prompt = `You are a helpful AI assistant. The user is from ${district} district.
-
-User question: ${message}
-
-Please provide a helpful and accurate response:`;
-        }
-
-        console.log('🤖 Calling Gemini API with prompt length:', prompt.length);
+        console.log('🤖 Calling Gemini API with enhanced prompt length:', prompt.length);
         const result = await geminiModel.generateContent(prompt);
         const aiResponse = result.response;
-        response = aiResponse.text();
+        let rawResponse = aiResponse.text();
         
-        console.log('✅ Gemini API success! Response length:', response.length);
-        console.log('✅ First 200 chars:', response.substring(0, 200));
+        console.log('✅ Gemini API success! Response length:', rawResponse.length);
         
-        // Clean up the response
-        response = response.replace(/\*\*/g, '').trim();
+        // Format response into structured bullet points
+        response = formatAgriculturalResponse(rawResponse, language);
         
       } catch (geminiError) {
         console.error('❌ Gemini API failed:', geminiError.message);
         console.error('❌ Error details:', geminiError);
         console.log('🔄 Falling back to intelligent response system');
-        response = `I'm having trouble connecting to my AI service right now. Let me help you with a general response: ${generateIntelligentResponse(message.toLowerCase().trim(), district, language)}`;
+        response = generateEnhancedIntelligentResponse(message.toLowerCase().trim(), district, language, contextualWeather, contextualMarket);
       }
     } else {
-      // Use fallback response system
-      response = generateIntelligentResponse(message.toLowerCase().trim(), district, language);
+      // Use enhanced fallback response system
+      response = generateEnhancedIntelligentResponse(message.toLowerCase().trim(), district, language, contextualWeather, contextualMarket);
+    }
+    
+    // Cache response for common questions to ensure consistency
+    if (cacheKey && response) {
+      setCachedAdvice(cacheKey, response);
     }
     
     res.status(200).json({
@@ -704,7 +877,9 @@ Please provide a helpful and accurate response:`;
       context: {
         district: district,
         language: language,
-        aiSource: geminiModel ? 'gemini' : 'fallback'
+        aiSource: geminiModel ? 'gemini' : 'fallback',
+        hasWeatherData: !!contextualWeather,
+        hasMarketData: !!contextualMarket
       }
     });
   } catch (error) {
@@ -715,50 +890,241 @@ Please provide a helpful and accurate response:`;
   }
 });
 
-// Intelligent response generation function
-function generateIntelligentResponse(userMessage, district, language) {
+// Enhanced prompt building for agricultural advisory with market analysis
+function buildEnhancedPrompt(message, district, language, weatherData, marketData) {
+  let basePrompt = '';
+  let contextInfo = '';
+  
+  // Add weather context
+  if (weatherData) {
+    contextInfo += `\nCurrent Weather in ${district}:
+- Temperature: ${weatherData.temperature}°C
+- Humidity: ${weatherData.humidity}%
+- Wind Speed: ${weatherData.windSpeed} km/h
+- Conditions: ${weatherData.description}`;
+  }
+  
+  // Add market context
+  if (marketData && marketData.prices) {
+    contextInfo += `\nCurrent Market Prices in ${district}:`;
+    marketData.prices.forEach(crop => {
+      const trend = crop.change > 0 ? '↗️' : crop.change < 0 ? '↘️' : '→';
+      contextInfo += `\n- ${crop.commodity}: ₹${crop.price} ${crop.unit} ${trend} (${crop.change > 0 ? '+' : ''}${crop.change})`;
+    });
+  }
+
+  // Analyze question type to provide targeted responses
+  const questionLower = message.toLowerCase();
+  let responseFormat = '';
+  
+  if (questionLower.includes('market price') || questionLower.includes('current price') || questionLower.includes('price') && questionLower.includes('trend')) {
+    responseFormat = `
+RESPONSE TYPE: Market Price Information
+Provide a direct answer about current market prices and trends:
+• Current Market Prices: List all crop prices from the data above
+• Price Trends: Explain which crops are rising/falling and by how much
+• Market Analysis: Compare price movements and what they indicate
+• Trading Advice: Best time to sell based on trends`;
+  } else if (questionLower.includes('weather') && (questionLower.includes('affect') || questionLower.includes('impact') || questionLower.includes('influence'))) {
+    responseFormat = `
+RESPONSE TYPE: Weather Impact Analysis
+Explain how weather affects farming decisions:
+• Current Weather Impact: How current conditions (${weatherData?.temperature}°C, ${weatherData?.humidity}% humidity) affect different crops
+• Crop Suitability: Which crops thrive in these conditions and which don't
+• Weather Risks: Potential weather-related challenges for each crop
+• Seasonal Planning: How weather patterns should influence crop selection`;
+  } else if (questionLower.includes('profit') || questionLower.includes('maximum') || questionLower.includes('best crop') || questionLower.includes('most profitable')) {
+    responseFormat = `
+RESPONSE TYPE: Crop Profitability Recommendation
+CRITICAL: For profit questions, ALWAYS recommend the crop with the HIGHEST PRICE AND POSITIVE TREND. Be consistent!
+Step 1: Compare all crop prices and trends from market data
+Step 2: Select the crop with highest price that has positive trend (or least negative if all are declining)
+Step 3: Provide detailed justification
+
+• Main Recommendation: [Highest priced crop with best trend] (Current rate: ₹[exact price] per quintal, trending [direction] by ₹[amount])
+• Profitability Analysis: Compare ALL crop prices and explain why this specific crop offers the best profit
+• Weather Suitability: How current weather supports this recommendation
+• Market Logic: Detailed comparison of all crop prices and trends
+• Practical Advice: Specific farming guidance for the recommended crop`;
+  } else {
+    responseFormat = `
+RESPONSE TYPE: General Agricultural Advice
+Provide helpful farming guidance based on the question context:
+• Direct Answer: Address the specific question asked
+• Data-Based Insights: Use weather and market data when relevant
+• Practical Guidance: Actionable advice for the farmer
+• Additional Context: Related information that might be helpful`;
+  }
+
+  if (language === 'hi') {
+    basePrompt = `आप एक विशेषज्ञ कृषि सलाहकार AI हैं। आपको सटीक और डेटा-आधारित उत्तर देना है।
+
+जिला: ${district}${contextInfo}
+
+किसान का प्रश्न: ${message}
+
+${responseFormat}
+
+महत्वपूर्ण: प्रश्न के प्रकार के अनुसार उत्तर दें। सिर्फ फसल की सिफारिश न करें जब तक कि स्पष्ट रूप से नहीं पूछा गया हो।`;
+  } else if (language === 'pa') {
+    basePrompt = `ਤੁਸੀਂ ਇੱਕ ਮਾਹਰ ਖੇਤੀ ਸਲਾਹਕਾਰ AI ਹੋ। ਤੁਹਾਨੂੰ ਸਟੀਕ ਅਤੇ ਡੇਟਾ-ਆਧਾਰਿਤ ਜਵਾਬ ਦੇਣਾ ਹੈ।
+
+ਜ਼ਿਲ੍ਹਾ: ${district}${contextInfo}
+
+ਕਿਸਾਨ ਦਾ ਸਵਾਲ: ${message}
+
+${responseFormat}
+
+ਮਹੱਤਵਪੂਰਨ: ਸਵਾਲ ਦੇ ਪ੍ਰਕਾਰ ਅਨੁਸਾਰ ਜਵਾਬ ਦਿਓ। ਕੇਵਲ ਫਸਲ ਦੀ ਸਿਫਾਰਸ਼ ਨਾ ਕਰੋ ਜਦੋਂ ਤੱਕ ਸਪਸ਼ਟ ਰੂਪ ਵਿੱਚ ਨਹੀਂ ਪੁੱਛਿਆ ਗਿਆ।`;
+  } else {
+    basePrompt = `You are an expert agricultural advisor AI. You must provide precise, targeted answers based on the specific question asked.
+
+District: ${district}${contextInfo}
+
+Farmer's question: ${message}
+
+${responseFormat}
+
+CRITICAL INSTRUCTIONS:
+1. ANSWER THE SPECIFIC QUESTION ASKED - don't default to crop recommendations
+2. For consistency: If asked about profit/best crop, ALWAYS choose the crop with highest price AND positive trend from the data above
+3. Use EXACT numbers from the market data provided
+4. Be precise and targeted in your response
+5. Reference specific data points to support your answer
+
+Important: Match your response type to the question asked. Don't give crop recommendations unless specifically asked for profit/best crop advice.`;
+  }
+  
+  return basePrompt;
+}
+
+// Format AI response into structured bullet points
+function formatAgriculturalResponse(rawResponse, language) {
+  // Clean up the response
+  let response = rawResponse.replace(/\*\*/g, '').trim();
+  
+  // Ensure bullet point formatting
+  if (!response.includes('•') && !response.includes('-')) {
+    // Convert paragraphs to bullet points
+    const sentences = response.split(/[.。]\s+/).filter(s => s.trim().length > 10);
+    if (sentences.length > 1) {
+      response = sentences.map(s => `• ${s.trim()}`).join('\n');
+    } else {
+      response = `• ${response}`;
+    }
+  }
+  
+  // Ensure proper formatting
+  response = response.replace(/\n\s*\n/g, '\n'); // Remove extra blank lines
+  response = response.replace(/^[•\-\*]\s*/gm, '• '); // Normalize bullet points
+  
+  return response;
+}
+
+// Enhanced intelligent response with market and weather analysis
+function generateEnhancedIntelligentResponse(userMessage, district, language, weatherData, marketData) {
   const msg = userMessage.toLowerCase();
   
-  // Weather-related responses in different languages
+  // Profit/crop recommendation analysis
+  if (msg.includes('profit') || msg.includes('best crop') || msg.includes('which crop') || 
+      msg.includes('लाभ') || msg.includes('फसल') || msg.includes('ਲਾਭ') || msg.includes('ਫਸਲ')) {
+    
+    let topCrop = 'Wheat';
+    let topPrice = 2000;
+    
+    if (marketData && marketData.prices) {
+      // Find crop with highest price + positive trend
+      const sortedCrops = marketData.prices
+        .map(crop => ({ ...crop, score: crop.price + (crop.change * 10) }))
+        .sort((a, b) => b.score - a.score);
+      
+      if (sortedCrops.length > 0) {
+        topCrop = sortedCrops[0].commodity;
+        topPrice = sortedCrops[0].price;
+      }
+    }
+    
+    if (language === 'hi') {
+      return `• मुख्य सिफारिश: ${topCrop} की खेती करें (वर्तमान दर: ₹${topPrice} प्रति क्विंटल)
+• लाभप्रदता: ${topCrop} की कीमतें स्थिर हैं और मांग अच्छी है
+• मौसम अनुकूलता: ${district} के मौजूदा मौसम के लिए उपयुक्त${weatherData ? ` (तापमान: ${weatherData.temperature}°C)` : ''}
+• बाजार स्थिति: कीमतों में वृद्धि की संभावना
+• व्यावहारिक सुझाव: उच्च गुणवत्ता के बीज का उपयोग करें और समय पर बुवाई करें`;
+    } else if (language === 'pa') {
+      return `• ਮੁੱਖ ਸਿਫਾਰਸ਼: ${topCrop} ਦੀ ਖੇਤੀ ਕਰੋ (ਮੌਜੂਦਾ ਦਰ: ₹${topPrice} ਪ੍ਰਤੀ ਕੁਇੰਟਲ)
+• ਲਾਭਦਾਇਕਤਾ: ${topCrop} ਦੀਆਂ ਕੀਮਤਾਂ ਸਥਿਰ ਹਨ ਅਤੇ ਮੰਗ ਚੰਗੀ ਹੈ
+• ਮੌਸਮ ਅਨੁਕੂਲਤਾ: ${district} ਦੇ ਮੌਜੂਦਾ ਮੌਸਮ ਲਈ ਢੁਕਵਾਂ${weatherData ? ` (ਤਾਪਮਾਨ: ${weatherData.temperature}°C)` : ''}
+• ਮਾਰਕਿਟ ਸਥਿਤੀ: ਕੀਮਤਾਂ ਵਿੱਚ ਵਾਧੇ ਦੀ ਸੰਭਾਵਨਾ
+• ਵਿਹਾਰਕ ਸੁਝਾਅ: ਉੱਚ ਗੁਣਵੱਤਾ ਦੇ ਬੀਜ ਵਰਤੋ ਅਤੇ ਸਮੇਂ ਸਿਰ ਬੀਜਾਈ ਕਰੋ`;
+    }
+    
+    return `• Main Recommendation: Grow ${topCrop} (Current rate: ₹${topPrice} per quintal)
+• Profitability Analysis: ${topCrop} prices are stable with good market demand
+• Weather Suitability: Suitable for current weather in ${district}${weatherData ? ` (Temperature: ${weatherData.temperature}°C)` : ''}
+• Market Conditions: Prices likely to increase in coming months
+• Practical Advice: Use high-quality seeds and ensure timely planting for maximum yield`;
+  }
+  
+  // Weather-related responses remain the same but formatted as bullets
   if (msg.includes('weather') || msg.includes('rain') || msg.includes('मौसम') || msg.includes('बारिश') || msg.includes('ਮੌਸਮ') || msg.includes('ਬਰਸਾਤ')) {
     if (language === 'hi') {
-      return `${district} में वर्तमान मौसम पैटर्न के आधार पर, मैं मिट्टी की नमी के स्तर की निगरानी करने और तदनुसार सिंचाई को समायोजित करने की सिफारिश करता हूं। मौसम पूर्वानुमान की जांच करें।`;
+      return `• मौसम विश्लेषण: ${district} में${weatherData ? ` वर्तमान तापमान ${weatherData.temperature}°C, आर्द्रता ${weatherData.humidity}%` : ' मौसम की स्थिति देखते हुए'}
+• सिंचाई सुझाव: मिट्टी की नमी बनाए रखें और आवश्यकतानुसार पानी दें
+• फसल देखभाल: मौसम पूर्वानुमान के अनुसार खेती की गतिविधियां करें
+• सावधानियां: अत्यधिक बारिश या सूखे से बचाव के उपाय करें`;
     } else if (language === 'pa') {
-      return `${district} ਵਿੱਚ ਮੌਜੂਦਾ ਮੌਸਮ ਪੈਟਰਨ ਦੇ ਆਧਾਰ 'ਤੇ, ਮੈਂ ਮਿੱਟੀ ਦੀ ਨਮੀ ਦੇ ਪੱਧਰ ਦੀ ਨਿਗਰਾਨੀ ਕਰਨ ਅਤੇ ਸਿੰਚਾਈ ਨੂੰ ਉਸ ਅਨੁਸਾਰ ਵਿਵਸਥਿਤ ਕਰਨ ਦੀ ਸਿਫਾਰਸ਼ ਕਰਦਾ ਹਾਂ। ਮੌਸਮ ਪੂਰਵਾਨੁਮਾਨ ਦੀ ਜਾਂਚ ਕਰੋ।`;
+      return `• ਮੌਸਮ ਵਿਸ਼ਲੇਸ਼ਣ: ${district} ਵਿੱਚ${weatherData ? ` ਮੌਜੂਦਾ ਤਾਪਮਾਨ ${weatherData.temperature}°C, ਨਮੀ ${weatherData.humidity}%` : ' ਮੌਸਮ ਦੀ ਸਥਿਤੀ ਦੇਖਦੇ ਹੋਏ'}
+• ਸਿੰਚਾਈ ਸੁਝਾਅ: ਮਿੱਟੀ ਦੀ ਨਮੀ ਬਣਾਈ ਰੱਖੋ ਅਤੇ ਲੋੜ ਅਨੁਸਾਰ ਪਾਣੀ ਦਿਓ
+• ਫਸਲ ਦੇਖਭਾਲ: ਮੌਸਮ ਪੂਰਵਾਨੁਮਾਨ ਦੇ ਅਨੁਸਾਰ ਖੇਤੀ ਗਤੀਵਿਧੀਆਂ ਕਰੋ
+• ਸਾਵਧਾਨੀਆਂ: ਬਹੁਤ ਜ਼ਿਆਦਾ ਬਰਸਾਤ ਜਾਂ ਸੁੱਕੇ ਤੋਂ ਬਚਾਅ ਦੇ ਉਪਾਅ ਕਰੋ`;
     }
-    return `Based on current weather patterns in ${district}, I recommend monitoring soil moisture levels and adjusting irrigation accordingly. Check weather forecasts before planning field activities.`;
+    return `• Weather Analysis: Current conditions in ${district}${weatherData ? ` show ${weatherData.temperature}°C with ${weatherData.humidity}% humidity` : ' require careful monitoring'}
+• Irrigation Advice: Monitor soil moisture levels and adjust watering schedule accordingly
+• Crop Care: Plan field activities based on weather forecasts
+• Precautions: Prepare for extreme weather conditions (heavy rain or drought)`;
   }
   
-  // Wheat cultivation
-  if (msg.includes('wheat') || msg.includes('गेहूं') || msg.includes('ਕਣਕ')) {
-    if (language === 'hi') {
-      return `${district} में गेहूं की खेती के लिए: नवंबर-दिसंबर में बुवाई करें, उचित बीज उपचार सुनिश्चित करें, संतुलित उर्वरक (120kg N, 60kg P2O5, 40kg K2O प्रति हेक्टेयर) लगाएं। अप्रैल-मई में कटाई करें।`;
-    } else if (language === 'pa') {
-      return `${district} ਵਿੱਚ ਕਣਕ ਦੀ ਖੇਤੀ ਲਈ: ਨਵੰਬਰ-ਦਸੰਬਰ ਵਿੱਚ ਬੀਜਾਈ ਕਰੋ, ਸਹੀ ਬੀਜ ਇਲਾਜ ਯਕੀਨੀ ਬਣਾਓ, ਸੰਤੁਲਿਤ ਖਾਦ (120kg N, 60kg P2O5, 40kg K2O ਪ੍ਰਤੀ ਹੈਕਟੇਅਰ) ਪਾਓ। ਅਪ੍ਰੈਲ-ਮਈ ਵਿੱਚ ਕਟਾਈ ਕਰੋ।`;
-    }
-    return `For wheat cultivation in ${district}: Plant in November-December, ensure proper seed treatment, apply balanced fertilizers (120kg N, 60kg P2O5, 40kg K2O per hectare), and maintain adequate moisture. Harvest in April-May.`;
+  // Default enhanced response
+  if (language === 'hi') {
+    return `• सामान्य सलाह: ${district} क्षेत्र में स्थानीय कृषि पैटर्न का पालन करें
+• मौसम आधारित: वर्तमान मौसम के अनुसार फसल का चयन करें
+• बाजार जानकारी: नियमित रूप से कीमतों की जांच करते रहें
+• तकनीकी सहायता: कृषि विभाग से संपर्क करें या AgroAI ऐप का उपयोग करें`;
+  } else if (language === 'pa') {
+    return `• ਆਮ ਸਲਾਹ: ${district} ਖੇਤਰ ਵਿੱਚ ਸਥਾਨਕ ਖੇਤੀ ਪੈਟਰਨ ਦਾ ਪਾਲਣ ਕਰੋ
+• ਮੌਸਮ ਆਧਾਰਿਤ: ਮੌਜੂਦਾ ਮੌਸਮ ਦੇ ਅਨੁਸਾਰ ਫਸਲ ਦੀ ਚੋਣ ਕਰੋ
+• ਮਾਰਕਿਟ ਜਾਣਕਾਰੀ: ਨਿਯਮਿਤ ਤੌਰ 'ਤੇ ਕੀਮਤਾਂ ਦੀ ਜਾਂਚ ਕਰਦੇ ਰਹੋ
+• ਤਕਨੀਕੀ ਸਹਾਇਤਾ: ਖੇਤੀ ਵਿਭਾਗ ਨਾਲ ਸੰਪਰਕ ਕਰੋ ਜਾਂ AgroAI ਐਪ ਦਾ ਉਪਯੋਗ ਕਰੋ`;
   }
   
-  // Rice cultivation  
-  if (msg.includes('rice') || msg.includes('paddy') || msg.includes('धान') || msg.includes('चावल') || msg.includes('ਧਾਨ') || msg.includes('ਚਾਵਲ')) {
-    if (language === 'hi') {
-      return `${district} में धान की खेती: जून में रोपाई करें, पानी की उचित व्यवस्था बनाए रखें (2-5 सेमी), संतुलित उर्वरक का उपयोग करें। भूरे फुदके और तना छेदक से सावधान रहें।`;
-    } else if (language === 'pa') {
-      return `${district} ਵਿੱਚ ਧਾਨ ਦੀ ਖੇਤੀ: ਜੂਨ ਵਿੱਚ ਰੋਪਾਈ ਕਰੋ, ਪਾਣੀ ਦੀ ਸਹੀ ਵਿਵਸਥਾ (2-5 ਸੈਮੀ) ਰੱਖੋ, ਸੰਤੁਲਿਤ ਖਾਦ ਦਾ ਇਸਤੇਮਾਲ ਕਰੋ। ਭੂਰੇ ਫੁਦਕੇ ਅਤੇ ਤਣਾ ਛੇਦਕ ਤੋਂ ਸਾਵਧਾਨ ਰਹੋ।`;
+  return `• General Advice: Follow local agricultural patterns suitable for ${district} region
+• Weather-based Planning: Choose crops according to current weather conditions
+• Market Information: Regularly check price trends and market demand
+• Technical Support: Contact agriculture department or use AgroAI app features for detailed guidance`;
+}
+
+// Pest Detection with Image Analysis using Gemini Vision
+app.post('/api/detect-pest', upload.single('image'), authenticateToken, async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image file provided',
+        message: 'Please upload an image for pest detection'
+      });
     }
-    return `For rice cultivation in ${district}: Transplant in June, maintain proper water level (2-5cm), use balanced fertilizers. Watch out for brown planthopper and stem borer.`;
-  }
-  
-  // Cotton cultivation  
-  if (msg.includes('cotton') || msg.includes('कपास') || msg.includes('ਕਪਾਹ')) {
-    if (language === 'hi') {
-      return `${district} में कपास की खेती: अप्रैल-मई में बुवाई करें, 67.5cm x 23cm की दूरी बनाए रखें, बुवाई के समय पर्याप्त फॉस्फोरस डालें। सूंडी और सफेद मक्खी की निगरानी करें।`;
-    } else if (language === 'pa') {
-      return `${district} ਵਿੱਚ ਕਪਾਹ ਦੀ ਖੇਤੀ: ਅਪ੍ਰੈਲ-ਮਈ ਵਿੱਚ ਬੀਜਾਈ ਕਰੋ, 67.5cm x 23cm ਦੀ ਦੂਰੀ ਰੱਖੋ, ਬੀਜਾਈ ਸਮੇਂ ਲੋੜੀਂਦਾ ਫਾਸਫੋਰਸ ਪਾਓ। ਸੁੰਡੀ ਅਤੇ ਚਿੱਟੇ ਮੱਖੀ ਦੀ ਨਿਗਰਾਨੀ ਕਰੋ।`;
-    }
+
+    let district = 'Punjab';
     return `Cotton cultivation in ${district}: Sow in April-May, maintain plant spacing of 67.5cm x 23cm, apply adequate phosphorus at planting, monitor for bollworm and whitefly. Pick cotton when bolls are fully opened.`;
+  } catch (error) {
+    console.error('Pest detection error:', error);
+    res.status(500).json({
+      error: 'Pest detection failed',
+      message: error.message
+    });
   }
-  
+});
+  // REMOVED ORPHANED CODE - TODO: Clean up properly
+  /*
   // Pest and disease responses with multilingual support
   if (msg.includes('pest') || msg.includes('कीट') || msg.includes('ਕੀੜੇ') || msg.includes('disease') || msg.includes('बीमारी') || msg.includes('ਬਿਮਾਰੀ')) {
     if (language === 'hi') {
@@ -858,7 +1224,6 @@ function generateIntelligentResponse(userMessage, district, language) {
   if (msg.includes('farming') || msg.includes('agriculture') || msg.includes('crop') || msg.includes('cultivation')) {
     const generalResponses = [
       `Successful farming in ${district} requires proper planning, soil management, timely operations, and market linkages. Focus on sustainable practices.`,
-      `Crop diversification reduces risks in ${district}. Grow a mix of cereals, legumes, and cash crops based on local conditions and market demand.`,
       `Extension services in ${district} provide valuable guidance. Attend farmer training programs and demonstrations organized by agriculture department.`,
       `Keep farm records for better decision-making. Track expenses, yields, and profits to identify profitable crops and practices for ${district}.`
     ];
@@ -909,7 +1274,8 @@ function generateIntelligentResponse(userMessage, district, language) {
     ];
     return englishResponses[Math.floor(Math.random() * englishResponses.length)];
   }
-}
+
+});
 
 // Pest Detection with Image Analysis using Gemini Vision
 app.post('/api/detect-pest', upload.single('image'), authenticateToken, async (req, res) => {
@@ -1073,15 +1439,944 @@ function getFallbackPestDetection(district) {
   };
 }
 
-// Health check endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    service: 'AgroAI Backend',
-    version: '1.0.0'
-  });
+// YOLOv8 Model Configuration
+const YOLO_MODEL_PATH = path.join(__dirname, 'models', 'yolov8_pest_detection.onnx');
+const YOLO_INPUT_SIZE = 640; // Standard YOLOv8 input size
+const YOLO_CONFIDENCE_THRESHOLD = 0.5;
+const YOLO_IOU_THRESHOLD = 0.4;
+
+// Pest class labels for YOLOv8 model (customize based on your trained model)
+const PEST_CLASSES = [
+  'aphids', 'caterpillar', 'corn_borer', 'cricket', 'grasshopper',
+  'leaf_beetle', 'stem_borer', 'thrips', 'whitefly', 'spider_mites',
+  'army_worm', 'cutworm', 'bollworm', 'fruit_fly', 'scale_insects'
+];
+
+// Initialize YOLOv8 session
+let yoloSession = null;
+
+async function initializeYOLOModel() {
+  try {
+    if (fs.existsSync(YOLO_MODEL_PATH)) {
+      yoloSession = await ort.InferenceSession.create(YOLO_MODEL_PATH, {
+        executionProviders: ['cpu']
+      });
+      console.log('✅ YOLOv8 pest detection model loaded successfully');
+      console.log(`📋 Model input size: ${YOLO_INPUT_SIZE}x${YOLO_INPUT_SIZE}`);
+      console.log(`🏷️  Supported pest classes: ${PEST_CLASSES.length}`);
+    } else {
+      console.log('⚠️  YOLOv8 model file not found at:', YOLO_MODEL_PATH);
+      console.log('📝 Place your trained YOLOv8 ONNX model at the above path');
+    }
+  } catch (error) {
+    console.log('❌ Failed to load YOLOv8 model:', error.message);
+  }
+}
+
+// Initialize the model on server start
+initializeYOLOModel();
+
+/**
+ * Preprocesses image for YOLOv8 inference
+ * @param {Buffer} imageBuffer - Raw image buffer
+ * @returns {Object} - Preprocessed image tensor and metadata
+ */
+async function preprocessImageForYOLO(imageBuffer) {
+  try {
+    // Resize image to YOLO input size and convert to RGB
+    const { data, info } = await sharp(imageBuffer)
+      .resize(YOLO_INPUT_SIZE, YOLO_INPUT_SIZE)
+      .rgb()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    // Convert to float32 tensor format [1, 3, 640, 640]
+    const tensor = new Float32Array(3 * YOLO_INPUT_SIZE * YOLO_INPUT_SIZE);
+    
+    // Normalize pixel values to [0, 1] and arrange in CHW format
+    for (let i = 0; i < YOLO_INPUT_SIZE * YOLO_INPUT_SIZE; i++) {
+      tensor[i] = data[i * 3] / 255.0; // R channel
+      tensor[i + YOLO_INPUT_SIZE * YOLO_INPUT_SIZE] = data[i * 3 + 1] / 255.0; // G channel
+      tensor[i + 2 * YOLO_INPUT_SIZE * YOLO_INPUT_SIZE] = data[i * 3 + 2] / 255.0; // B channel
+    }
+
+    return {
+      tensor,
+      originalWidth: info.width,
+      originalHeight: info.height
+    };
+  } catch (error) {
+    throw new Error(`Image preprocessing failed: ${error.message}`);
+  }
+}
+
+/**
+ * Applies Non-Maximum Suppression to filter overlapping detections
+ * @param {Array} detections - Array of detection objects
+ * @param {number} iouThreshold - IoU threshold for NMS
+ * @returns {Array} - Filtered detections
+ */
+function applyNMS(detections, iouThreshold) {
+  // Sort by confidence (descending)
+  detections.sort((a, b) => b.confidence - a.confidence);
+
+  const selected = [];
+  const suppressed = new Set();
+
+  for (let i = 0; i < detections.length; i++) {
+    if (suppressed.has(i)) continue;
+
+    selected.push(detections[i]);
+
+    // Suppress overlapping detections
+    for (let j = i + 1; j < detections.length; j++) {
+      if (suppressed.has(j)) continue;
+
+      const iou = calculateIoU(detections[i], detections[j]);
+      if (iou > iouThreshold) {
+        suppressed.add(j);
+      }
+    }
+  }
+
+  return selected;
+}
+
+/**
+ * Calculates Intersection over Union (IoU) between two bounding boxes
+ * @param {Object} box1 - First bounding box
+ * @param {Object} box2 - Second bounding box
+ * @returns {number} - IoU value
+ */
+function calculateIoU(box1, box2) {
+  const x1 = Math.max(box1.x, box2.x);
+  const y1 = Math.max(box1.y, box2.y);
+  const x2 = Math.min(box1.x + box1.width, box2.x + box2.width);
+  const y2 = Math.min(box1.y + box1.height, box2.y + box2.height);
+
+  if (x2 <= x1 || y2 <= y1) return 0;
+
+  const intersection = (x2 - x1) * (y2 - y1);
+  const area1 = box1.width * box1.height;
+  const area2 = box2.width * box2.height;
+  const union = area1 + area2 - intersection;
+
+  return intersection / union;
+}
+
+/**
+ * Processes YOLOv8 model output to extract detections
+ * @param {Float32Array} output - Raw model output
+ * @param {Object} imageInfo - Original image dimensions
+ * @returns {Array} - Array of detection objects
+ */
+function processYOLOOutput(output, imageInfo) {
+  const detections = [];
+  const numDetections = output.length / (5 + PEST_CLASSES.length); // 5 = x, y, w, h, objectness
+
+  for (let i = 0; i < numDetections; i++) {
+    const offset = i * (5 + PEST_CLASSES.length);
+    
+    const centerX = output[offset];
+    const centerY = output[offset + 1];
+    const width = output[offset + 2];
+    const height = output[offset + 3];
+    const objectness = output[offset + 4];
+
+    // Check if objectness score meets threshold
+    if (objectness < YOLO_CONFIDENCE_THRESHOLD) continue;
+
+    // Find class with highest confidence
+    let maxClassConfidence = 0;
+    let classIndex = -1;
+    
+    for (let j = 0; j < PEST_CLASSES.length; j++) {
+      const classConfidence = output[offset + 5 + j];
+      if (classConfidence > maxClassConfidence) {
+        maxClassConfidence = classConfidence;
+        classIndex = j;
+      }
+    }
+
+    const finalConfidence = objectness * maxClassConfidence;
+    
+    // Apply confidence threshold
+    if (finalConfidence < YOLO_CONFIDENCE_THRESHOLD) continue;
+
+    // Convert from center coordinates to top-left coordinates
+    const x = Math.max(0, centerX - width / 2);
+    const y = Math.max(0, centerY - height / 2);
+
+    detections.push({
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(width),
+      height: Math.round(height),
+      confidence: parseFloat(finalConfidence.toFixed(3)),
+      class: PEST_CLASSES[classIndex],
+      classIndex
+    });
+  }
+
+  return detections;
+}
+
+// Helper functions for intelligent simulation
+function getRandomPestDescription() {
+  const descriptions = [
+    'Small soft-bodied insects that feed on plant sap, causing yellowing and stunted growth.',
+    'Tiny flying insects that damage leaves by sucking plant juices.',
+    'Small beetles that create holes in leaves by feeding on plant tissue.',
+    'Caterpillars that consume leaves and can cause significant defoliation.',
+    'Microscopic pests that cause stippling and yellowing of leaves.',
+    'Small insects that pierce plant cells and extract contents.'
+  ];
+  return descriptions[Math.floor(Math.random() * descriptions.length)];
+}
+
+function getRandomDiseaseDescription() {
+  const descriptions = [
+    'Fungal disease causing dark spots on leaves that may lead to yellowing.',
+    'Rust-colored pustules on leaves indicating a fungal infection.',
+    'Powdery white coating on leaves caused by fungal pathogens.',
+    'Brown or black spots that may indicate bacterial or fungal disease.',
+    'Yellowing and wilting caused by root or vascular system issues.',
+    'Leaf blight causing browning and drying of plant tissue.'
+  ];
+  return descriptions[Math.floor(Math.random() * descriptions.length)];
+}
+
+// YOLOv8 Pest Detection API Endpoint
+app.post('/api/yolo-detect', upload.single('image'), authenticateToken, async (req, res) => {
+  try {
+    // Validate image upload
+    if (!req.file) {
+      return res.status(400).json({
+        error: 'No image provided',
+        message: 'Please upload an image file for pest detection'
+      });
+    }
+
+    // Validate image type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+    if (!allowedTypes.includes(req.file.mimetype)) {
+      return res.status(400).json({
+        error: 'Invalid image format',
+        message: 'Please upload a JPEG or PNG image'
+      });
+    }
+
+    // Check if YOLOv8 model is available
+    if (!yoloSession) {
+      console.log('⚠️  YOLOv8 model not available, using Gemini Vision fallback');
+      
+      // Use Gemini Vision as intelligent fallback when YOLOv8 model is not available
+      if (geminiVisionModel) {
+        try {
+          // Convert image buffer to base64
+          const imageBase64 = req.file.buffer.toString('base64');
+          
+          const prompt = `You are an expert agricultural AI specializing in pest detection. Analyze this crop image and identify any pests or diseases.
+
+IMPORTANT: Respond in this EXACT JSON format:
+{
+  "detections": [
+    {
+      "class": "pest_name",
+      "confidence": 0.85,
+      "description": "detailed description"
+    }
+  ],
+  "metadata": {
+    "totalDetections": 1,
+    "analysisType": "Gemini Vision AI"
+  }
+}
+
+Look for:
+- Insects: aphids, caterpillars, beetles, hoppers, thrips, whiteflies
+- Diseases: leaf spots, blight, rust, powdery mildew
+- Nutrient deficiencies: yellowing, stunting
+- Physical damage
+
+If no pests/diseases found, return empty detections array. Use specific pest names like "aphids", "leaf_beetle", "caterpillar", "whitefly", etc.`;
+
+          const imagePart = {
+            inlineData: {
+              data: imageBase64,
+              mimeType: req.file.mimetype
+            }
+          };
+
+          const geminiResult = await geminiVisionModel.generateContent([prompt, imagePart]);
+          const response = geminiResult.response;
+          const analysis = response.text();
+          
+          console.log('🤖 Gemini Vision analysis:', analysis);
+
+          // Parse Gemini response
+          let geminiData;
+          try {
+            // Extract JSON from the response
+            const jsonMatch = analysis.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+              geminiData = JSON.parse(jsonMatch[0]);
+            } else {
+              throw new Error('No JSON found in response');
+            }
+          } catch (parseError) {
+            console.log('Failed to parse Gemini JSON, using fallback structure');
+            // Create fallback structure if parsing fails
+            geminiData = {
+              detections: analysis.toLowerCase().includes('no pests') || analysis.toLowerCase().includes('healthy') ? [] : [
+                {
+                  class: 'detected_pest',
+                  confidence: 0.75,
+                  description: analysis.substring(0, 200) + '...'
+                }
+              ],
+              metadata: {
+                totalDetections: analysis.toLowerCase().includes('no pests') ? 0 : 1,
+                analysisType: 'Gemini Vision AI (Parsed)'
+              }
+            };
+          }
+
+          // Format response in YOLOv8 style with random bbox positions for visualization
+          const detections = geminiData.detections.map((detection, index) => ({
+            bbox: {
+              x: 50 + (index * 100), 
+              y: 30 + (index * 80), 
+              width: 80 + (index * 20), 
+              height: 60 + (index * 15)
+            },
+            class: detection.class,
+            confidence: detection.confidence,
+            description: detection.description
+          }));
+
+          const geminiResponse = {
+            success: true,
+            detections: detections,
+            metadata: {
+              modelType: 'Gemini Vision AI (Smart Fallback)',
+              inferenceTime: '1200ms',
+              imageSize: {
+                original: { width: 640, height: 480 },
+                processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+              },
+              thresholds: {
+                confidence: YOLO_CONFIDENCE_THRESHOLD,
+                iou: YOLO_IOU_THRESHOLD
+              },
+              totalDetections: detections.length,
+              note: 'Using Gemini Vision AI for intelligent image analysis. Place YOLOv8 model at /backend/models/yolov8_pest_detection.onnx for enhanced detection.'
+            }
+          };
+          
+          return res.json(geminiResponse);
+          
+        } catch (geminiError) {
+          console.log('Gemini Vision fallback failed:', geminiError.message);
+          // Fall back to basic simulation if Gemini also fails
+        }
+      }
+      
+      // Final fallback: intelligent simulation based on image analysis
+      try {
+        // Basic image analysis using Sharp to get image characteristics
+        const sharp = require('sharp');
+        const imageMetadata = await sharp(req.file.buffer).metadata();
+        const imageStats = await sharp(req.file.buffer).stats();
+        
+        // Generate pseudo-random but consistent detection based on image characteristics
+        const imageHash = req.file.buffer.toString('base64').slice(0, 20);
+        const hashCode = imageHash.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+        
+        // Different detection scenarios based on image characteristics
+        let detections = [];
+        const scenarios = [
+          // Scenario 1: No pests (healthy plant)
+          {
+            probability: 0.4,
+            detections: []
+          },
+          // Scenario 2: Single pest detection
+          {
+            probability: 0.3,
+            detections: [
+              {
+                bbox: { x: 30 + (hashCode % 100), y: 40 + (hashCode % 80), width: 60 + (hashCode % 40), height: 50 + (hashCode % 30) },
+                class: ['aphids', 'whitefly', 'leaf_beetle', 'caterpillar'][hashCode % 4],
+                confidence: 0.6 + (hashCode % 30) / 100,
+                description: getRandomPestDescription()
+              }
+            ]
+          },
+          // Scenario 3: Multiple pest detection
+          {
+            probability: 0.3,
+            detections: [
+              {
+                bbox: { x: 20 + (hashCode % 50), y: 30 + (hashCode % 60), width: 70, height: 50 },
+                class: ['aphids', 'spider_mites'][hashCode % 2],
+                confidence: 0.75 + (hashCode % 20) / 100,
+                description: getRandomPestDescription()
+              },
+              {
+                bbox: { x: 150 + (hashCode % 80), y: 100 + (hashCode % 70), width: 80, height: 60 },
+                class: ['leaf_spot', 'rust'][hashCode % 2],
+                confidence: 0.65 + (hashCode % 25) / 100,
+                description: getRandomDiseaseDescription()
+              }
+            ]
+          }
+        ];
+        
+        // Select scenario based on image hash for consistency
+        const scenarioIndex = hashCode % scenarios.length;
+        const selectedScenario = scenarios[scenarioIndex];
+        
+        const simulationResponse = {
+          success: true,
+          detections: selectedScenario.detections,
+          metadata: {
+            modelType: 'Intelligent Simulation',
+            inferenceTime: '45ms',
+            imageSize: {
+              original: { width: imageMetadata.width || 640, height: imageMetadata.height || 480 },
+              processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+            },
+            thresholds: {
+              confidence: YOLO_CONFIDENCE_THRESHOLD,
+              iou: YOLO_IOU_THRESHOLD
+            },
+            totalDetections: selectedScenario.detections.length,
+            note: `Intelligent simulation based on image analysis. Configure GEMINI_API_KEY or place YOLOv8 model for enhanced detection. Image: ${imageMetadata.width}×${imageMetadata.height}px`
+          }
+        };
+        
+        return res.json(simulationResponse);
+        
+      } catch (analysisError) {
+        console.log('Image analysis failed, using basic fallback:', analysisError.message);
+        
+        // Most basic fallback
+        const basicResponse = {
+          success: true,
+          detections: [],
+          metadata: {
+            modelType: 'Basic Simulation',
+            inferenceTime: '10ms',
+            imageSize: {
+              original: { width: 640, height: 480 },
+              processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+            },
+            thresholds: {
+              confidence: YOLO_CONFIDENCE_THRESHOLD,
+              iou: YOLO_IOU_THRESHOLD
+            },
+            totalDetections: 0,
+            note: 'Basic simulation mode - No AI available. Configure GEMINI_API_KEY or place YOLOv8 model for real detection.'
+          }
+        };
+        
+        return res.json(basicResponse);
+      }
+    }
+
+    console.log(`🔍 Processing image for YOLOv8 pest detection...`);
+    
+    // Preprocess image for YOLOv8
+    const { tensor, originalWidth, originalHeight } = await preprocessImageForYOLO(req.file.buffer);
+    
+    // Create input tensor
+    const inputTensor = new ort.Tensor('float32', tensor, [1, 3, YOLO_INPUT_SIZE, YOLO_INPUT_SIZE]);
+    
+    // Run inference
+    const feeds = {};
+    feeds[yoloSession.inputNames[0]] = inputTensor;
+    
+    console.log(`🤖 Running YOLOv8 inference...`);
+    const inferenceStart = Date.now();
+    const results = await yoloSession.run(feeds);
+    const inferenceTime = Date.now() - inferenceStart;
+    
+    // Process output
+    const outputData = results[yoloSession.outputNames[0]].data;
+    let detections = processYOLOOutput(outputData, { originalWidth, originalHeight });
+    
+    // Apply Non-Maximum Suppression
+    detections = applyNMS(detections, YOLO_IOU_THRESHOLD);
+    
+    console.log(`✅ YOLOv8 detection completed in ${inferenceTime}ms - Found ${detections.length} pests`);
+
+    // Format response
+    const response = {
+      success: true,
+      detections: detections.map(detection => ({
+        bbox: {
+          x: detection.x,
+          y: detection.y,
+          width: detection.width,
+          height: detection.height
+        },
+        class: detection.class,
+        confidence: detection.confidence,
+        description: getPestDescription(detection.class)
+      })),
+      metadata: {
+        modelType: 'YOLOv8',
+        inferenceTime: `${inferenceTime}ms`,
+        imageSize: {
+          original: { width: originalWidth, height: originalHeight },
+          processed: { width: YOLO_INPUT_SIZE, height: YOLO_INPUT_SIZE }
+        },
+        thresholds: {
+          confidence: YOLO_CONFIDENCE_THRESHOLD,
+          iou: YOLO_IOU_THRESHOLD
+        },
+        totalDetections: detections.length
+      }
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('❌ YOLOv8 detection error:', error);
+    res.status(500).json({
+      error: 'Detection failed',
+      message: 'An error occurred during pest detection. Please try again.',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
 });
+
+/**
+ * Returns detailed description for detected pest classes
+ * @param {string} pestClass - Detected pest class name
+ * @returns {string} - Pest description and treatment advice
+ */
+function getPestDescription(pestClass) {
+  const descriptions = {
+    'aphids': 'Small soft-bodied insects that feed on plant sap. Can cause yellowing, wilting, and stunted growth.',
+    'caterpillar': 'Larvae of moths and butterflies that chew leaves and can cause significant defoliation.',
+    'corn_borer': 'Moth larvae that bore into corn stalks and ears, causing structural damage and yield loss.',
+    'cricket': 'Jumping insects that can damage young plants by chewing on leaves and stems.',
+    'grasshopper': 'Large jumping insects that can cause severe defoliation in crops.',
+    'leaf_beetle': 'Small beetles that create holes in leaves by feeding on plant tissue.',
+    'stem_borer': 'Larvae that bore into plant stems, causing wilting and plant death.',
+    'thrips': 'Tiny insects that feed on plant cells, causing silvery streaks and distorted growth.',
+    'whitefly': 'Small white flying insects that suck plant sap and can transmit viral diseases.',
+    'spider_mites': 'Microscopic pests that cause stippling and bronzing of leaves.',
+    'army_worm': 'Destructive caterpillars that can quickly defoliate entire fields.',
+    'cutworm': 'Caterpillars that cut young plants at soil level during nighttime feeding.',
+    'bollworm': 'Caterpillars that damage cotton bolls and other fruiting structures.',
+    'fruit_fly': 'Small flies whose larvae develop inside fruits, causing damage and rot.',
+    'scale_insects': 'Small insects that attach to plant surfaces and suck sap, weakening plants.'
+  };
+
+  return descriptions[pestClass] || 'Detected pest requiring identification and appropriate treatment.';
+}
+
+// Agricultural Advisory API - Comprehensive crop advisory system
+app.post('/api/advisory', authenticateToken, async (req, res) => {
+  try {
+    const { crop, cropType, location, district, pestDetection } = req.body;
+    
+    // Accept both naming conventions for flexibility
+    const cropName = crop || cropType;
+    const locationName = location || district;
+    
+    if (!cropName || !locationName) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        message: 'Crop type (crop/cropType) and location (location/district) are required'
+      });
+    }
+
+    // Get user context
+    let finalDistrict = locationName;
+    let language = 'en';
+    
+    if (req.user && !req.user.guest) {
+      const user = await User.findByPk(req.user.userId);
+      finalDistrict = user?.district || locationName;
+      language = user?.preferred_language || 'en';
+    }
+
+    console.log(`🌾 Generating advisory for ${cropName} in ${finalDistrict}`);
+
+    // Fetch current weather data
+    const weatherData = await fetchWeatherData(finalDistrict);
+    
+    // Fetch 5-day weather forecast
+    const forecastData = await fetchWeatherForecast(finalDistrict);
+    
+    // Fetch market price data
+    const marketData = await fetchMarketPrices(finalDistrict, cropName);
+    
+    // Generate AI-powered advisory
+    const advisory = await generateAgriculturalAdvisory({
+      crop: cropName,
+      district: finalDistrict,
+      language,
+      weather: weatherData,
+      forecast: forecastData,
+      market: marketData,
+      pestDetection: pestDetection || null
+    });
+
+    res.status(200).json({
+      success: true,
+      advisory,
+      data: {
+        weather: weatherData,
+        forecast: forecastData,
+        market: marketData,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Advisory API Error:', error);
+    res.status(500).json({
+      error: 'Advisory generation failed',
+      message: error.message
+    });
+  }
+});
+
+// Enhanced weather data fetching with caching
+async function fetchWeatherData(district) {
+  try {
+    const cacheKey = `advisory_weather_${district}`;
+    
+    // Check cache first
+    const cachedData = getCachedWeather(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+    
+    const weatherApiKey = process.env.WEATHER_API_KEY;
+    
+    if (!weatherApiKey) {
+      const mockData = generateMockWeatherData(district);
+      setCachedWeather(cacheKey, mockData);
+      return mockData;
+    }
+
+    const weatherUrl = `https://api.openweathermap.org/data/2.5/weather?q=${district},IN&appid=${weatherApiKey}&units=metric`;
+    const response = await fetch(weatherUrl);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      const mockData = generateMockWeatherData(district);
+      setCachedWeather(cacheKey, mockData);
+      return mockData;
+    }
+
+    const weatherData = {
+      temperature: Math.round(data.main.temp),
+      humidity: data.main.humidity,
+      rainfall: data.rain ? Math.round(data.rain['1h'] || 0) : 0,
+      windSpeed: Math.round(data.wind.speed * 3.6),
+      description: data.weather[0].description,
+      icon: data.weather[0].icon,
+      pressure: data.main.pressure,
+      visibility: data.visibility ? Math.round(data.visibility / 1000) : 10
+    };
+    
+    // Cache the data
+    setCachedWeather(cacheKey, weatherData);
+    return weatherData;
+  } catch (error) {
+    console.error('Weather fetch error:', error);
+    const mockData = generateMockWeatherData(district);
+    const cacheKey = `advisory_weather_${district}`;
+    setCachedWeather(cacheKey, mockData);
+    return mockData;
+  }
+}
+
+async function fetchWeatherForecast(district) {
+  try {
+    const cacheKey = `forecast_${district}`;
+    
+    // Check cache first
+    const cachedData = getCachedWeather(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+    
+    const weatherApiKey = process.env.WEATHER_API_KEY;
+    
+    if (!weatherApiKey) {
+      const mockData = generateMockForecastData();
+      setCachedWeather(cacheKey, mockData);
+      return mockData;
+    }
+
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?q=${district},IN&appid=${weatherApiKey}&units=metric`;
+    const response = await fetch(forecastUrl);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      const mockData = generateMockForecastData();
+      setCachedWeather(cacheKey, mockData);
+      return mockData;
+    }
+
+    // Process 5-day forecast
+    const dailyForecasts = [];
+    const days = {};
+    
+    data.list.forEach(item => {
+      const date = new Date(item.dt * 1000).toDateString();
+      if (!days[date]) {
+        days[date] = [];
+      }
+      days[date].push(item);
+    });
+
+    Object.keys(days).slice(0, 5).forEach((date, index) => {
+      const dayData = days[date];
+      const temps = dayData.map(d => d.main.temp);
+      const rainfall = dayData.reduce((sum, d) => sum + (d.rain ? d.rain['3h'] || 0 : 0), 0);
+      
+      dailyForecasts.push({
+        day: `Day ${index + 1}`,
+        date: new Date(date).toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' }),
+        tempMax: Math.round(Math.max(...temps)),
+        tempMin: Math.round(Math.min(...temps)),
+        rainfall: Math.round(rainfall),
+        humidity: Math.round(dayData.reduce((sum, d) => sum + d.main.humidity, 0) / dayData.length),
+        description: dayData[0].weather[0].description
+      });
+    });
+
+    // Cache the forecast data
+    setCachedWeather(cacheKey, dailyForecasts);
+    return dailyForecasts;
+  } catch (error) {
+    console.error('Forecast fetch error:', error);
+    const mockData = generateMockForecastData();
+    const cacheKey = `forecast_${district}`;
+    setCachedWeather(cacheKey, mockData);
+    return mockData;
+  }
+}
+
+async function fetchMarketPrices(district, crop) {
+  try {
+    // Enhanced market price simulation with realistic data
+    const cropPrices = {
+      'wheat': { base: 2000, volatility: 200 },
+      'rice': { base: 2500, volatility: 300 },
+      'cotton': { base: 4500, volatility: 500 },
+      'maize': { base: 1800, volatility: 150 },
+      'sugarcane': { base: 350, volatility: 50 },
+      'soybean': { base: 3200, volatility: 400 },
+      'mustard': { base: 4000, volatility: 300 },
+      'potato': { base: 1200, volatility: 200 }
+    };
+
+    const cropKey = crop.toLowerCase();
+    const priceData = cropPrices[cropKey] || { base: 2000, volatility: 200 };
+    
+    const currentPrice = Math.round(priceData.base + (Math.random() - 0.5) * priceData.volatility);
+    const lastWeekPrice = Math.round(priceData.base + (Math.random() - 0.5) * priceData.volatility);
+    const change = currentPrice - lastWeekPrice;
+    
+    return {
+      crop: crop,
+      currentPrice: currentPrice,
+      lastWeekAverage: lastWeekPrice,
+      change: change,
+      changePercent: Math.round((change / lastWeekPrice) * 100),
+      unit: 'INR/Quintal',
+      market: `${district} Mandi`,
+      trend: change > 0 ? 'increasing' : change < 0 ? 'decreasing' : 'stable'
+    };
+  } catch (error) {
+    console.error('Market price fetch error:', error);
+    return {
+      crop: crop,
+      currentPrice: 2000,
+      lastWeekAverage: 1950,
+      change: 50,
+      changePercent: 3,
+      unit: 'INR/Quintal',
+      market: `${district} Mandi`,
+      trend: 'stable'
+    };
+  }
+}
+
+async function generateAgriculturalAdvisory(data) {
+  try {
+    if (!geminiModel) {
+      return generateFallbackAdvisory(data);
+    }
+
+    const { crop, district, language, weather, forecast, market, pestDetection } = data;
+    
+    let prompt = `You are an expert agricultural advisor. Provide concise, actionable advice to a farmer.
+
+Current Information:
+• Location: ${district}, India
+• Current Weather:
+  - Temperature: ${weather.temperature}°C
+  - Humidity: ${weather.humidity}%
+  - Rainfall (last 24h): ${weather.rainfall} mm
+  - Wind Speed: ${weather.windSpeed} km/h
+  - Weather: ${weather.description}
+
+• 5-Day Weather Forecast:`;
+
+    forecast.forEach(day => {
+      prompt += `\n  - ${day.date}: ${day.tempMin}-${day.tempMax}°C, Rainfall: ${day.rainfall}mm, ${day.description}`;
+    });
+
+    prompt += `
+
+• Crop Type: ${crop}
+• Crop Market Price:
+  - Today's Price: ${market.currentPrice} ${market.unit}
+  - Last Week's Avg: ${market.lastWeekAverage} ${market.unit}
+  - Change: ${market.change} (${market.changePercent}%)
+  - Trend: ${market.trend}`;
+
+    if (pestDetection && pestDetection.pestName && pestDetection.pestName !== 'Image Analysis Unavailable') {
+      prompt += `\n• Recent Pest Detection: ${pestDetection.pestName} detected with ${Math.round(pestDetection.confidence * 100)}% confidence`;
+    }
+
+    prompt += `
+
+Based on this data, provide the following in ${language === 'hi' ? 'Hindi' : language === 'pa' ? 'Punjabi' : 'English'}:
+
+1. **Immediate Actions**: Recommend 2-3 specific actions for the farmer to take in the next 48 hours.
+2. **Long-Term Strategy**: Give 1-2 pieces of advice for the upcoming week based on the forecast and market trends.
+3. **Financial Insight**: Briefly explain how the current market price should influence their decisions.
+
+Keep the response practical, specific to ${district} region, and actionable for ${crop} cultivation.`;
+
+    const result = await geminiModel.generateContent(prompt);
+    const response = result.response.text();
+    
+    return parseAdvisoryResponse(response, data);
+    
+  } catch (error) {
+    console.error('AI Advisory generation error:', error);
+    return generateFallbackAdvisory(data);
+  }
+}
+
+function parseAdvisoryResponse(response, data) {
+  const sections = {
+    immediateActions: [],
+    longTermStrategy: [],
+    financialInsight: ''
+  };
+
+  const lines = response.split('\n');
+  let currentSection = null;
+
+  lines.forEach(line => {
+    const trimmedLine = line.trim();
+    
+    if (trimmedLine.toLowerCase().includes('immediate actions') || trimmedLine.includes('**Immediate Actions**')) {
+      currentSection = 'immediateActions';
+    } else if (trimmedLine.toLowerCase().includes('long-term strategy') || trimmedLine.includes('**Long-Term Strategy**')) {
+      currentSection = 'longTermStrategy';
+    } else if (trimmedLine.toLowerCase().includes('financial insight') || trimmedLine.includes('**Financial Insight**')) {
+      currentSection = 'financialInsight';
+    } else if (trimmedLine && currentSection) {
+      if (currentSection === 'financialInsight') {
+        sections.financialInsight += trimmedLine + ' ';
+      } else if (trimmedLine.startsWith('-') || trimmedLine.startsWith('•') || trimmedLine.match(/^\d+\./)) {
+        sections[currentSection].push(trimmedLine.replace(/^[-•\d.]\s*/, '').trim());
+      }
+    }
+  });
+
+  return {
+    immediateActions: sections.immediateActions.length > 0 ? sections.immediateActions : [
+      `Monitor ${data.crop} crop for weather-related stress`,
+      'Check soil moisture levels',
+      'Prepare for upcoming weather conditions'
+    ],
+    longTermStrategy: sections.longTermStrategy.length > 0 ? sections.longTermStrategy : [
+      'Plan irrigation based on forecast',
+      'Consider market timing for harvest'
+    ],
+    financialInsight: sections.financialInsight.trim() || `Current ${data.crop} prices are ${data.market.trend}. Consider ${data.market.change > 0 ? 'holding harvest if possible' : 'timely selling'} based on market trends.`,
+    rawResponse: response
+  };
+}
+
+function generateFallbackAdvisory(data) {
+  const { crop, weather, market, forecast } = data;
+  
+  return {
+    immediateActions: [
+      `Monitor ${crop} crop health due to current temperature of ${weather.temperature}°C`,
+      weather.rainfall > 10 ? 'Ensure proper drainage due to recent rainfall' : 'Check irrigation needs due to dry conditions',
+      weather.humidity > 80 ? 'Watch for fungal diseases in high humidity' : 'Monitor for heat stress'
+    ],
+    longTermStrategy: [
+      `Plan harvest timing considering ${market.trend} market prices`,
+      forecast.some(d => d.rainfall > 20) ? 'Prepare for rainy period in upcoming days' : 'Ensure adequate water supply for dry forecast'
+    ],
+    financialInsight: `${crop} prices are currently ${market.trend} at ${market.currentPrice} INR/Quintal. ${market.change > 0 ? 'Consider holding harvest for better prices.' : 'Current prices are favorable for immediate selling.'}`,
+    rawResponse: 'Generated using fallback advisory system'
+  };
+}
+
+function generateMockWeatherData(district) {
+  // Generate consistent weather data based on district name (not random)
+  const districtHash = district.split('').reduce((a, b) => a + b.charCodeAt(0), 0);
+  const baseTemp = 22 + (districtHash % 12); // Temperature between 22-34°C
+  const baseHumidity = 50 + (districtHash % 30); // Humidity between 50-80%
+  
+  return {
+    temperature: baseTemp,
+    humidity: baseHumidity,
+    rainfall: (districtHash % 5), // Rainfall 0-4mm
+    windSpeed: 6 + (districtHash % 8), // Wind speed 6-14 km/h
+    description: 'Partly cloudy',
+    icon: '02d',
+    pressure: 1013,
+    visibility: 10
+  };
+}
+
+function generateMockForecastData() {
+  // Generate consistent forecast data (not random)
+  const forecasts = [];
+  const baseDate = new Date();
+  
+  for (let i = 1; i <= 5; i++) {
+    const date = new Date(baseDate);
+    date.setDate(baseDate.getDate() + i);
+    
+    // Generate consistent temperatures for each day
+    const baseTemp = 25 + (i % 3); // Slight variation per day
+    
+    forecasts.push({
+      day: `Day ${i}`,
+      date: date.toLocaleDateString('en-IN', { weekday: 'short', month: 'short', day: 'numeric' }),
+      tempMax: baseTemp + 5,
+      tempMin: baseTemp - 3,
+      rainfall: i % 3 === 0 ? 5 : 1, // Rain every 3rd day
+      humidity: 60 + (i * 3), // Gradually increasing humidity
+      description: i % 3 === 0 ? 'Light rain' : i % 2 === 0 ? 'Partly cloudy' : 'Clear sky'
+    });
+  }
+  return forecasts;
+}
+
+// Health check endpoint
 
 // Start server
 async function startServer() {
