@@ -1,17 +1,79 @@
-# Environment variables
+# Environment variables - ALL ENVIRONMENTS
+*.env
+*.env.*
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
 backend/.env
+backend/.env.*
+client/.env
+client/.env.*
+
+# API Keys and Secrets
+config/keys.js
+secrets/
+*.pem
+*.key
+*.crt
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+database.sqlite
 
 # Dependencies
 backend/node_modules/
 client/node_modules/
+node_modules/
+
+# Build outputs
+client/build/
+dist/
+build/
+
+# Logs
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # System files
 .DS_Store
-*.log
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 
 # IDE files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 
 # Temporary files
 *.tmp
+.cache/
+.temp/
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+.nyc_output/
+
+# AWS
+.aws/
+
+# Docker
+.dockerignore
