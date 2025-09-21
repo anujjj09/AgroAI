@@ -37,7 +37,7 @@ const PestTab = ({ user }) => {
       formData.append('image', selectedImage);
       formData.append('userDistrict', user?.district || 'Punjab');
 
-      const response = await API.post('/detect-pest', formData, {
+      const response = await API.post('/api/detect-pest', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
