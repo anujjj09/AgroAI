@@ -93,13 +93,26 @@ export const en = {
     chooseGallery: "Choose from Gallery",
     clear: "Clear",
     analyzeImage: "Analyze Image",
-    captureHint: "Capture your crop's leaves, stems, or affected areas",
+    captureHint: "Upload crop images for accurate AI-powered pest identification with bounding box visualization",
     detectionResult: "Detection Result",
     match: "Match",
     keySymptoms: "Key Symptoms",
     recommendedTreatment: "Recommended Treatment",
     cropAffected: "Crop Affected",
-    season: "Season"
+    season: "Season",
+    // YOLOv8 specific
+    selectImage: "Select an image to analyze",
+    dragDrop: "Supports JPEG, PNG • Max size: 10MB",
+    runDetection: "Run Pest Detection",
+    processing: "Processing image...",
+    detectionComplete: "Detection Complete",
+    pestsFound: "Pests Found",
+    noPestsDetected: "No pests detected in this image. Your crop appears healthy!",
+    confidenceScore: "Confidence Score",
+    boundingBoxes: "Detected Objects",
+    serverError: "Unable to connect to server. Please check if the backend is running.",
+    imageError: "Please select an image first",
+    simulationMode: "Running in simulation mode"
   },
 
   // Market

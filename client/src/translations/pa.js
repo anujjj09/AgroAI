@@ -146,13 +146,26 @@ export const pa = {
     chooseGallery: "ਗੈਲਰੀ ਤੋਂ ਚੁਣੋ",
     clear: "ਸਾਫ਼ ਕਰੋ",
     analyzeImage: "ਤਸਵੀਰ ਦਾ ਵਿਸ਼ਲੇਸ਼ਣ ਕਰੋ",
-    captureHint: "ਆਪਣੀ ਫਸਲ ਦੇ ਪੱਤੇ, ਤਣੇ ਜਾਂ ਪ੍ਰਭਾਵਿਤ ਖੇਤਰਾਂ ਨੂੰ ਕੈਪਚਰ ਕਰੋ",
+    captureHint: "ਬਾਉਂਡਿੰਗ ਬਾਕਸ ਵਿਜ਼ੂਅਲਾਈਜ਼ੇਸ਼ਨ ਦੇ ਨਾਲ ਸਟੀਕ AI-ਸੰਚਾਲਿਤ ਕੀੜਾ ਪਛਾਣ ਲਈ ਫਸਲ ਦੀਆਂ ਤਸਵੀਰਾਂ ਅੱਪਲੋਡ ਕਰੋ",
     detectionResult: "ਪਛਾਣ ਨਤੀਜਾ",
     match: "ਮੇਲ",
     keySymptoms: "ਮੁੱਖ ਲੱਛਣ",
     recommendedTreatment: "ਸਿਫਾਰਸ਼ੀ ਇਲਾਜ",
     cropAffected: "ਪ੍ਰਭਾਵਿਤ ਫਸਲ",
-    season: "ਮੌਸਮ"
+    season: "ਮੌਸਮ",
+    // YOLOv8 specific
+    selectImage: "ਵਿਸ਼ਲੇਸ਼ਣ ਲਈ ਇੱਕ ਤਸਵੀਰ ਚੁਣੋ",
+    dragDrop: "JPEG, PNG ਸਮਰਥਿਤ • ਅਧਿਕਤਮ ਸਾਈਜ਼: 10MB",
+    runDetection: "ਕੀੜਾ ਪਛਾਣ ਚਲਾਓ",
+    processing: "ਤਸਵੀਰ ਪ੍ਰੋਸੈਸਿੰਗ...",
+    detectionComplete: "ਪਛਾਣ ਪੂਰੀ",
+    pestsFound: "ਕੀੜੇ ਮਿਲੇ",
+    noPestsDetected: "ਇਸ ਤਸਵੀਰ ਵਿੱਚ ਕੋਈ ਕੀੜੇ ਨਹੀਂ ਮਿਲੇ। ਤੁਹਾਡੀ ਫਸਲ ਸਿਹਤਮੰਦ ਲੱਗਦੀ ਹੈ!",
+    confidenceScore: "ਭਰੋਸਾ ਸਕੋਰ",
+    boundingBoxes: "ਪਛਾਣੇ ਗਏ ਆਬਜੈਕਟ",
+    serverError: "ਸਰਵਰ ਨਾਲ ਕਨੈਕਟ ਨਹੀਂ ਹੋ ਸਕਿਆ। ਕਿਰਪਾ ਕਰਕੇ ਜਾਂਚੋ ਕਿ ਬੈਕਐਂਡ ਚੱਲ ਰਿਹਾ ਹੈ।",
+    imageError: "ਕਿਰਪਾ ਕਰਕੇ ਪਹਿਲਾਂ ਇੱਕ ਤਸਵੀਰ ਚੁਣੋ",
+    simulationMode: "ਸਿਮੂਲੇਸ਼ਨ ਮੋਡ ਵਿੱਚ ਚੱਲ ਰਿਹਾ ਹੈ"
   },
 
   // Market

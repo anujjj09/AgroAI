@@ -52,12 +52,39 @@ const ChatTab = ({ user, token }) => {
     setLoading(true);
 
     try {
-      console.log('🚀 Sending AI request:', {
+      console.log('🚀 Sending enhanced AI request:', {
         message: userMessage.content,
         user: user?.name,
         district: user?.district,
         language: user?.language
       });
+      
+      // Fetch contextual data for enhanced AI response
+      let weatherContext = null;
+      let marketContext = null;
+      
+      try {
+        // Get weather data for context
+        const weatherResponse = await API.get(`/api/weather/${user?.district || 'Ludhiana'}`);
+        if (weatherResponse.success) {
+          weatherContext = weatherResponse.weather;
+        }
+      } catch (weatherErr) {
+        console.log('Weather context not available:', weatherErr.message);
+      }
+      
+      try {
+        // Get market data for context
+        const marketResponse = await API.get(`/api/market/${user?.district || 'Ludhiana'}`);
+        if (marketResponse.success) {
+          marketContext = {
+            district: marketResponse.district,
+            prices: marketResponse.prices
+          };
+        }
+      } catch (marketErr) {
+        console.log('Market context not available:', marketErr.message);
+      }
       
       const response = await API.post('/api/ai/chat', {
         message: userMessage.content,
@@ -65,16 +92,19 @@ const ChatTab = ({ user, token }) => {
           name: user?.name,
           district: user?.district,
           language: user?.language
-        }
+        },
+        weatherData: weatherContext,
+        marketData: marketContext
       });
 
-      console.log('✅ AI Response received:', response);
+      console.log('✅ Enhanced AI Response received:', response);
 
       const aiMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: response.response || 'Sorry, I couldn\'t process your request.',
-        timestamp: new Date()
+        content: formatAIResponse(response.response || 'Sorry, I couldn\'t process your request.'),
+        timestamp: new Date(),
+        hasContext: !!(weatherContext || marketContext)
       };
 
       setMessages(prev => [...prev, aiMessage]);
@@ -86,13 +116,13 @@ const ChatTab = ({ user, token }) => {
       const msg = userMessage.content.toLowerCase();
       
       if (msg.includes('weather') || msg.includes('मौसम') || msg.includes('ਮੌਸਮ')) {
-        fallbackContent = 'Weather information is available in the Weather tab. Please check there for current conditions and forecasts.';
-      } else if (msg.includes('crop') || msg.includes('farming') || msg.includes('फसल') || msg.includes('ਖੇਤੀ')) {
-        fallbackContent = 'For crop-related questions, I recommend checking the Market tab for current prices and trends. Common crops in Punjab include wheat, rice, cotton, and sugarcane.';
+        fallbackContent = '• Weather information is available in the Weather tab\n• Check there for current conditions and forecasts\n• Use weather data to plan your farming activities';
+      } else if (msg.includes('crop') || msg.includes('farming') || msg.includes('profit') || msg.includes('फसल') || msg.includes('ਖੇਤੀ')) {
+        fallbackContent = '• For crop recommendations, check the Market tab for current prices\n• Common profitable crops in Punjab: wheat, rice, cotton, sugarcane\n• Consider seasonal patterns and local demand\n• Consult local agricultural experts for specific guidance';
       } else if (msg.includes('pest') || msg.includes('disease') || msg.includes('कीट') || msg.includes('ਕੀੜੇ')) {
-        fallbackContent = 'For pest identification and treatment, please use the Pest Detection tab where you can upload photos for analysis.';
+        fallbackContent = '• Use the Pest Detection tab for photo-based analysis\n• Upload clear images of affected plants\n• Get instant identification and treatment suggestions\n• Contact agricultural extension officers for severe infestations';
       } else {
-        fallbackContent = `Sorry, I'm having trouble connecting to the AI service right now. Please try again in a moment, or check the other tabs for weather, market prices, and pest detection features.`;
+        fallbackContent = '• AI service temporarily unavailable\n• Try the Weather tab for current conditions\n• Check Market tab for crop prices\n• Use Pest Detection for plant health analysis\n• Contact local agricultural department for immediate assistance';
       }
       
       const aiMessage = {
@@ -105,6 +135,24 @@ const ChatTab = ({ user, token }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Format AI response to ensure proper bullet point display
+  const formatAIResponse = (response) => {
+    if (!response) return response;
+    
+    // If response doesn't have bullet points, convert it
+    if (!response.includes('•') && !response.includes('-') && !response.includes('*')) {
+      const sentences = response.split(/[.।]\s+/).filter(s => s.trim().length > 10);
+      if (sentences.length > 1) {
+        return sentences.map(s => `• ${s.trim()}`).join('\n');
+      } else {
+        return `• ${response}`;
+      }
+    }
+    
+    // Normalize bullet points
+    return response.replace(/^[\s]*[-*]\s*/gm, '• ');
   };
 
   const handleKeyPress = (e) => {
@@ -150,7 +198,27 @@ const ChatTab = ({ user, token }) => {
               )}
             </div>
             <div className="message-content">
-              <div className="message-text">{message.content}</div>
+              <div className="message-text">
+                {message.type === 'ai' ? (
+                  <div>
+                    {message.hasContext && (
+                      <div className="context-indicator">
+                        <i className="fas fa-chart-line"></i>
+                        <span>Enhanced with weather & market data</span>
+                      </div>
+                    )}
+                    <div className="formatted-response">
+                      {message.content.split('\n').map((line, index) => (
+                        <div key={index} className={line.trim().startsWith('•') ? 'bullet-point' : 'text-line'}>
+                          {line.trim()}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  message.content
+                )}
+              </div>
               <div className="message-time">
                 {formatTimestamp(message.timestamp)}
               </div>
@@ -177,7 +245,36 @@ const ChatTab = ({ user, token }) => {
 
 
 
-      {/* Chat Input */}
+      {/* Quick Agricultural Questions */}
+      <div className="quick-questions">
+        <h4>💡 Quick Agricultural Questions</h4>
+        <div className="questions-grid">
+          <button 
+            className="quick-question-btn" 
+            onClick={() => setNewMessage("Which crop will give maximum profit this season?")}
+          >
+            🌾 Best profitable crop this season?
+          </button>
+          <button 
+            className="quick-question-btn" 
+            onClick={() => setNewMessage("What are current market prices and trends?")}
+          >
+            📈 Current market prices and trends
+          </button>
+          <button 
+            className="quick-question-btn" 
+            onClick={() => setNewMessage("How does weather affect crop selection?")}
+          >
+            🌤️ Weather impact on crop choice
+          </button>
+          <button 
+            className="quick-question-btn" 
+            onClick={() => setNewMessage("Best farming practices for maximum yield")}
+          >
+            🚜 Best practices for high yield
+          </button>
+        </div>
+      </div>
       <div className="chat-input-container">
         <div className="chat-input">
           <textarea
@@ -197,11 +294,11 @@ const ChatTab = ({ user, token }) => {
           </button>
         </div>
         <div className="input-hint">
-          {t('chat.inputHint')}
+          💡 Ask about profitable crops, market analysis, weather planning, or farming techniques. Responses include real-time data!
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .chat-container {
           max-width: 1000px;
           margin: 0 auto;
@@ -322,6 +419,45 @@ const ChatTab = ({ user, token }) => {
         .message.ai .message-text {
           background: #E8F5E8;
           color: #2E7D32;
+        }
+
+        .context-indicator {
+          background: #f0f8ff;
+          color: #1976D2;
+          padding: 6px 10px;
+          border-radius: 12px;
+          font-size: 0.8rem;
+          margin-bottom: 8px;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          border: 1px solid #e3f2fd;
+        }
+
+        .formatted-response {
+          line-height: 1.6;
+        }
+
+        .bullet-point {
+          display: flex;
+          align-items: flex-start;
+          margin: 6px 0;
+          padding-left: 0;
+        }
+
+        .bullet-point::before {
+          content: "";
+          margin-right: 8px;
+          margin-top: 8px;
+          flex-shrink: 0;
+        }
+
+        .text-line {
+          margin: 4px 0;
+        }
+
+        .text-line:empty {
+          display: none;
         }
 
         .message-time {

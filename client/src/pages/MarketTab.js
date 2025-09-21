@@ -146,7 +146,7 @@ const MarketTab = ({ user }) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .market-container {
           max-width: 1200px;
           margin: 0 auto;

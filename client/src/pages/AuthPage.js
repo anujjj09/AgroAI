@@ -72,7 +72,7 @@ const AuthPage = ({ onLogin }) => {
         </h1>
         <p style={{ 
           fontSize: '1.3rem', 
-          color: '#E8F5E8',
+          color: '#000000',
           textShadow: '1px 1px 3px rgba(0,0,0,0.3)',
           fontWeight: '500'
         }}>

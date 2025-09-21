@@ -93,13 +93,26 @@ export const hi = {
     chooseGallery: "गैलरी से चुनें",
     clear: "साफ करें",
     analyzeImage: "छवि का विश्लेषण करें",
-        captureHint: "अपनी फसल के पत्ते, तने या प्रभावित क्षेत्रों को कैप्चर करें",
+    captureHint: "बाउंडिंग बॉक्स विज़ुअलाइज़ेशन के साथ सटीक AI-संचालित कीट पहचान के लिए फसल की छवियां अपलोड करें",
     detectionResult: "पहचान परिणाम",
     match: "मेल",
     keySymptoms: "मुख्य लक्षण",
     recommendedTreatment: "अनुशंसित उपचार",
     cropAffected: "प्रभावित फसल",
-    season: "मौसम"
+    season: "मौसम",
+    // YOLOv8 specific
+    selectImage: "विश्लेषण के लिए एक छवि चुनें",
+    dragDrop: "JPEG, PNG समर्थित • अधिकतम आकार: 10MB",
+    runDetection: "कीट पहचान चलाएं",
+    processing: "छवि प्रसंस्करण...",
+    detectionComplete: "पहचान पूर्ण",
+    pestsFound: "कीट मिले",
+    noPestsDetected: "इस छवि में कोई कीट नहीं मिले। आपकी फसल स्वस्थ दिखती है!",
+    confidenceScore: "विश्वास स्कोर",
+    boundingBoxes: "पहचाने गए ऑब्जेक्ट",
+    serverError: "सर्वर से कनेक्ट नहीं हो सका। कृपया जांचें कि बैकएंड चल रहा है।",
+    imageError: "कृपया पहले एक छवि चुनें",
+    simulationMode: "सिमुलेशन मोड में चल रहा है"
   },
 
   // Market

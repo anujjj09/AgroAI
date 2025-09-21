@@ -47,10 +47,6 @@ const PhoneStep = ({ onSuccess }) => {
     <>
       <div style={{ textAlign: 'center', marginBottom: '25px' }}>
         <i className="fas fa-tractor" style={{ fontSize: '3rem', color: '#4CAF50', marginBottom: '15px' }}></i>
-        <h2 style={{ marginBottom: '15px', color: '#2E7D32' }}>🌾 {t('auth.login')}</h2>
-        <p style={{ color: '#388E3C', marginBottom: '20px', fontSize: '1.1rem' }}>
-          <i className="fas fa-mobile-alt"></i> {t('auth.phoneNumber')}
-        </p>
       </div>
 
       <form onSubmit={handleSubmit}>

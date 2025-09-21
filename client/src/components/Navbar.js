@@ -47,7 +47,7 @@ const Navbar = ({ user, onLogout }) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .navbar {
           background: linear-gradient(135deg, #2E7D32 0%, #4CAF50 100%);
           padding: 0;

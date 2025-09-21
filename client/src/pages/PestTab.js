@@ -298,7 +298,7 @@ const PestTab = ({ user }) => {
         )}
       </div>
 
-      <style jsx>{`
+      <style>{`
         .pest-container {
           max-width: 1200px;
           margin: 0 auto;

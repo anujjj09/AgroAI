@@ -1,24 +1,23 @@
 import React, { useState } from 'react';
+import '../DesignSystem.css';
 import WeatherTab from './WeatherTab';
 import MarketTab from './MarketTab';
 import ChatTab from './ChatTab';
-import PestTab from './PestTab';
+import PestDetectionTab from './PestDetectionTab';
+import AdvisoryTab from './AdvisoryTab';
 import { useLanguage } from '../contexts/LanguageContext';
 
 const Dashboard = ({ user, token, onLogout }) => {
-  const [activeTab, setActiveTab] = useState('weather');
+  const [activeTab, setActiveTab] = useState('advisory');
   const { t } = useLanguage();
 
   return (
     <div className="container">
       
-      <div className="card" style={{ background: 'linear-gradient(135deg, #E8F5E8 0%, #F1F8E9 100%)', border: '2px solid #81C784', marginBottom: '20px' }}>
+  <div className="card-surface" style={{ background: 'linear-gradient(135deg, #E8F5E8 0%, #F1F8E9 100%)', border: '2px solid #81C784', marginBottom: '20px' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <h2 style={{ color: '#2E7D32', marginBottom: '5px' }}>
-              <i className="fas fa-tractor"></i> {t('home.welcome')}
-            </h2>
-            <p style={{ color: '#388E3C', margin: '0' }}>
+            <p style={{ color: '#388E3C', margin: '0', fontSize: '16px', fontWeight: '500' }}>
               <i className="fas fa-map-marker-alt"></i> {user.district} • 
               <i className="fas fa-calendar"></i> {new Date().toLocaleDateString('en-IN', {
                 weekday: 'long',
@@ -32,38 +31,29 @@ const Dashboard = ({ user, token, onLogout }) => {
         </div>
       </div>
 
-      <div className="tabs" style={{ display: 'flex', background: 'white', borderRadius: '10px', overflow: 'hidden', margin: '20px 0', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}>
+      <div className="tab-bar" style={{ margin: '20px 0' }}>
         {[
+          { id: 'advisory', icon: 'fas fa-seedling', label: 'Smart Advisory' },
           { id: 'weather', icon: 'fas fa-cloud-sun', label: t('home.weatherInfo') },
           { id: 'market', icon: 'fas fa-chart-line', label: t('market.title') },
           { id: 'chat', icon: 'fas fa-robot', label: t('home.aiChat') },
-          { id: 'pest', icon: 'fas fa-bug', label: t('pestDetection.title') }
+          { id: 'pest', icon: 'fas fa-bug', label: t('nav.pestDetection') }
         ].map(tab => (
           <button
             key={tab.id}
-            className={`tab ${activeTab === tab.id ? 'active' : ''}`}
+            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
-            style={{
-              flex: 1,
-              padding: '16px 20px',
-              textAlign: 'center',
-              cursor: 'pointer',
-              background: activeTab === tab.id ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f8f9fa',
-              color: activeTab === tab.id ? 'white' : 'inherit',
-              border: 'none',
-              transition: 'all 0.3s',
-              fontWeight: '500'
-            }}
           >
             <i className={tab.icon}></i> {tab.label}
           </button>
         ))}
       </div>
 
+      {activeTab === 'advisory' && <AdvisoryTab user={user} token={token} />}
       {activeTab === 'weather' && <WeatherTab user={user} token={token} />}
       {activeTab === 'market' && <MarketTab user={user} token={token} />}
       {activeTab === 'chat' && <ChatTab user={user} token={token} />}
-      {activeTab === 'pest' && <PestTab user={user} token={token} />}
+      {activeTab === 'pest' && <PestDetectionTab user={user} token={token} />}
     </div>
   );
 };

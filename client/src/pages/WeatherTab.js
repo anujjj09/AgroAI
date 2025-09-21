@@ -227,7 +227,7 @@ const WeatherTab = ({ user }) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .weather-container {
           max-width: 1000px;
           margin: 0 auto;
